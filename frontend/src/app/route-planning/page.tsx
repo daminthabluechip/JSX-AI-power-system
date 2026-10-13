@@ -1,48 +1,95 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
-import { planDeliveries, planVehicles, type Priority } from "@/lib/mockData";
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import ErrorBox from "@/components/ui/ErrorBox";
+import PlanMap from "@/components/map/PlanMap";
+import {
+  api, formatDuration, PRIORITY_LABEL, STATUS_LABEL, todayISO, VEHICLE_TYPE_LABEL, waitForPlan,
+  type Plan, type Priority,
+} from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 
 const PRIORITY_STYLE: Record<Priority, string> = {
-  Critical: "bg-red-50 text-red-600",
-  High: "bg-orange-50 text-orange-600",
-  Medium: "bg-blue-50 text-blue-600",
-  Low: "bg-slate-100 text-slate-600",
+  critical: "bg-red-50 text-red-600",
+  high: "bg-orange-50 text-orange-600",
+  medium: "bg-blue-50 text-blue-600",
+  low: "bg-slate-100 text-slate-600",
 };
 
-// Small helper: toggle an id in a list of selected ids.
-const toggle = <T,>(list: T[], item: T) =>
-  list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
+type Phase = "select" | "solving" | "review" | "dispatching" | "dispatched";
 
-// Route Planning page: pick vehicles + deliveries, then generate and dispatch a plan.
+// Add or remove an id from a list of selected ids.
+const toggle = (list: number[], id: number) =>
+  list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+
+// Route Planning: pick vehicles + orders, run the optimizer, review the plan, dispatch it.
 export default function RoutePlanningPage() {
-  const [vehicleIds, setVehicleIds] = useState<string[]>(["VH 2048", "VH 1042"]);
-  const [deliveryIds, setDeliveryIds] = useState<number[]>([1, 2, 3]);
-  const [planned, setPlanned] = useState(true); // true once a plan has been generated
+  const vehicles = useApi(() => api.vehicles.list());
+  const orders = useApi(() => api.orders.list(todayISO()));
 
-  const chosenVehicles = planVehicles.filter((v) => vehicleIds.includes(v.id));
-  const chosenDeliveries = planDeliveries.filter((d) => deliveryIds.includes(d.id));
-  const totalCapacity = chosenVehicles.reduce((s, v) => s + v.capacityTons, 0);
-  const totalLoad = chosenDeliveries.reduce((s, d) => s + d.weightTons, 0);
+  // null = "the user has not changed the selection yet", so the defaults below apply.
+  const [vehicleSel, setVehicleSel] = useState<number[] | null>(null);
+  const [orderSel, setOrderSel] = useState<number[] | null>(null);
+  const [phase, setPhase] = useState<Phase>("select");
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Selections make the previous plan stale, so hide the result until regenerated.
-  const changeVehicles = (id: string) => { setVehicleIds((l) => toggle(l, id)); setPlanned(false); };
-  const changeDeliveries = (id: number) => { setDeliveryIds((l) => toggle(l, id)); setPlanned(false); };
+  // Only vehicles that can drive, and orders that still need a plan.
+  const usableVehicles = (vehicles.data?.items ?? []).filter((v) => v.status !== "maintenance");
+  const plannableOrders = (orders.data?.items ?? []).filter((o) => o.status === "pending" || o.status === "scheduled");
 
-  const canPlan = chosenVehicles.length > 0 && chosenDeliveries.length > 0;
+  // Default selection: every available vehicle and every plannable order.
+  const vehicleIds = vehicleSel ?? usableVehicles.filter((v) => v.status === "available").map((v) => v.id);
+  const orderIds = orderSel ?? plannableOrders.map((o) => o.id);
+  const setVehicleIds = setVehicleSel;
+  const setOrderIds = setOrderSel;
 
-  function regenerate() {
-    // TODO: TOOL/API CALL HERE - POST /plans/generate with
-    // { vehicle_ids: vehicleIds, order_ids: deliveryIds, date }, then poll
-    // GET /plans/{id} until the OR-Tools job finishes and show its real totals.
-    setPlanned(true);
+  const chosenVehicles = usableVehicles.filter((v) => vehicleIds.includes(v.id));
+  const chosenOrders = plannableOrders.filter((o) => orderIds.includes(o.id));
+  const totalCapacityT = chosenVehicles.reduce((s, v) => s + v.weight_capacity_kg, 0) / 1000;
+  const totalLoadT = chosenOrders.reduce((s, o) => s + o.weight_kg, 0) / 1000;
+  const canPlan = chosenVehicles.length > 0 && chosenOrders.length > 0 && phase !== "solving" && phase !== "dispatching";
+
+  // Changing the selection makes an existing plan stale.
+  const edit = (fn: () => void) => { fn(); if (phase === "review") setPhase("select"); };
+
+  async function generate() {
+    setError(null);
+    setPhase("solving");
+    try {
+      // POST /plans/generate starts the optimizer in the background (202) ...
+      const started = await api.plans.generate({
+        date: todayISO(), vehicle_ids: vehicleIds, order_ids: orderIds,
+      });
+      // ... then we poll GET /plans/{id} until it is ready or failed.
+      const result = await waitForPlan(started.id);
+      if (result.status === "failed") throw new Error(result.error ?? "Planning failed");
+      setPlan(result);
+      setPhase("review");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Planning failed");
+      setPhase("select");
+    }
   }
 
-  function dispatch() {
-    // TODO: TOOL/API CALL HERE - POST /plans/{id}/dispatch to send the plan to the vehicles.
-    alert("Dispatch is not connected to the backend yet.");
+  async function dispatch() {
+    if (!plan) return;
+    setPhase("dispatching");
+    try {
+      await api.plans.dispatch(plan.id); // POST /plans/{id}/dispatch
+      setPhase("dispatched");
+      setVehicleSel(null); // back to defaults once the data reloads
+      setOrderSel(null);
+      vehicles.reload();
+      orders.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Dispatch failed");
+      setPhase("review");
+    }
   }
+
+  const step = phase === "select" || phase === "solving" ? 1 : phase === "dispatched" ? 3 : 2;
 
   return (
     <div className="space-y-6">
@@ -51,22 +98,21 @@ export default function RoutePlanningPage() {
         <p className="text-sm text-slate-500">Build an optimized delivery plan in a few simple steps.</p>
       </div>
 
-      {/* Step indicator (step 2 is active in the mockup) */}
+      {/* Step indicator */}
       <ol className="mx-auto flex max-w-xl items-center gap-4 text-xs font-medium">
         {["Select resources", "Review route", "Dispatch"].map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
-            <span
-              className={`flex h-5 w-5 items-center justify-center rounded-full text-white ${
-                i < 2 ? "bg-blue-600" : "bg-slate-300"
-              }`}
-            >
+            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-white ${i < step ? "bg-blue-600" : "bg-slate-300"}`}>
               {i + 1}
             </span>
-            <span className={i < 2 ? "text-slate-900" : "text-slate-400"}>{label}</span>
+            <span className={i < step ? "text-slate-900" : "text-slate-400"}>{label}</span>
             {i < 2 && <span className="h-px flex-1 bg-slate-200" />}
           </li>
         ))}
       </ol>
+
+      {(vehicles.error || orders.error) && <ErrorBox message={(vehicles.error ?? orders.error)!} />}
+      {error && <ErrorBox message={error} />}
 
       <div className="grid grid-cols-3 items-start gap-4">
         <div className="col-span-2 space-y-4">
@@ -76,40 +122,31 @@ export default function RoutePlanningPage() {
               <div>
                 <h3 className="font-semibold">Select vehicles</h3>
                 <p className="text-xs text-slate-500">
-                  {chosenVehicles.length} selected · {totalCapacity} t combined capacity
+                  {chosenVehicles.length} selected · {totalCapacityT.toFixed(1)} t combined capacity
                 </p>
               </div>
-              <button
-                onClick={() => { setVehicleIds(planVehicles.map((v) => v.id)); setPlanned(false); }}
-                className="text-xs font-semibold text-blue-600"
-              >
+              <button onClick={() => edit(() => setVehicleIds(usableVehicles.map((v) => v.id)))} className="text-xs font-semibold text-blue-600">
                 Select all
               </button>
             </div>
-            <ul className="mt-3 space-y-2">
-              {/* TODO: TOOL/API CALL HERE - load the fleet with GET /vehicles?status=available,on_route */}
-              {planVehicles.map((v) => (
+            <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+              {usableVehicles.map((v) => (
                 <li key={v.id}>
-                  <label
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${
-                      vehicleIds.includes(v.id) ? "border-blue-300 bg-blue-50/50" : "border-slate-200"
-                    }`}
-                  >
-                    <input type="checkbox" checked={vehicleIds.includes(v.id)} onChange={() => changeVehicles(v.id)} />
+                  <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${vehicleIds.includes(v.id) ? "border-blue-300 bg-blue-50/50" : "border-slate-200"}`}>
+                    <input type="checkbox" checked={vehicleIds.includes(v.id)} onChange={() => edit(() => setVehicleIds(toggle(vehicleIds, v.id)))} />
                     <div className="flex-1">
-                      <p className="font-semibold">{v.id}</p>
-                      <p className="text-xs text-slate-500">{v.loadTons} / {v.capacityTons} t loaded</p>
+                      <p className="font-semibold">{v.registration}</p>
+                      <p className="text-xs text-slate-500">
+                        {(v.weight_capacity_kg / 1000).toFixed(1)} t · {v.volume_capacity_m3} m³ · {v.model} · {VEHICLE_TYPE_LABEL[v.vehicle_type]}
+                      </p>
                     </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        v.status === "Available" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"
-                      }`}
-                    >
-                      {v.status}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${v.status === "available" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                      {STATUS_LABEL[v.status]}
                     </span>
                   </label>
                 </li>
               ))}
+              {!vehicles.loading && usableVehicles.length === 0 && <li className="py-4 text-center text-sm text-slate-400">No vehicles available.</li>}
             </ul>
           </section>
 
@@ -119,42 +156,36 @@ export default function RoutePlanningPage() {
               <div>
                 <h3 className="font-semibold">Select deliveries</h3>
                 <p className="text-xs text-slate-500">
-                  {chosenDeliveries.length} selected · {totalLoad.toFixed(1)} t total load
+                  {chosenOrders.length} selected · {totalLoadT.toFixed(1)} t total load
                 </p>
               </div>
-              <button
-                onClick={() => { setDeliveryIds(planDeliveries.map((d) => d.id)); setPlanned(false); }}
-                className="text-xs font-semibold text-blue-600"
-              >
+              <button onClick={() => edit(() => setOrderIds(plannableOrders.map((o) => o.id)))} className="text-xs font-semibold text-blue-600">
                 Select all
               </button>
             </div>
-            <ul className="mt-3 space-y-2">
-              {/* TODO: TOOL/API CALL HERE - load pending orders with GET /orders?status=pending&date= */}
-              {planDeliveries.map((d) => (
-                <li key={d.id}>
-                  <label
-                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${
-                      deliveryIds.includes(d.id) ? "border-blue-300 bg-blue-50/50" : "border-slate-200"
-                    }`}
-                  >
-                    <input type="checkbox" checked={deliveryIds.includes(d.id)} onChange={() => changeDeliveries(d.id)} />
+            <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+              {plannableOrders.map((o) => (
+                <li key={o.id}>
+                  <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${orderIds.includes(o.id) ? "border-blue-300 bg-blue-50/50" : "border-slate-200"}`}>
+                    <input type="checkbox" checked={orderIds.includes(o.id)} onChange={() => edit(() => setOrderIds(toggle(orderIds, o.id)))} />
                     <div className="flex-1">
-                      <p className="font-semibold">{d.customer}</p>
-                      <p className="text-xs text-slate-500">{d.id} · Due {d.due}</p>
+                      <p className="font-semibold">{o.customer}</p>
+                      <p className="text-xs text-slate-500">
+                        {o.address} · {o.earliest_arrival ?? "-"}–{o.latest_arrival ?? "-"} · {(o.weight_kg / 1000).toFixed(1)} t
+                        {o.required_vehicle_type && ` · needs ${VEHICLE_TYPE_LABEL[o.required_vehicle_type].toLowerCase()}`}
+                      </p>
                     </div>
-                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLE[d.priority]}`}>
-                      {d.priority}
-                    </span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${PRIORITY_STYLE[o.priority]}`}>{PRIORITY_LABEL[o.priority]}</span>
                   </label>
                 </li>
               ))}
+              {!orders.loading && plannableOrders.length === 0 && <li className="py-4 text-center text-sm text-slate-400">No pending orders for today.</li>}
             </ul>
           </section>
         </div>
 
         {/* Route summary panel */}
-        <aside className="rounded-xl border border-slate-200 bg-white p-5">
+        <aside className="sticky top-4 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-blue-600" />
             <div>
@@ -163,20 +194,26 @@ export default function RoutePlanningPage() {
             </div>
           </div>
 
-          {planned && canPlan ? (
+          {phase === "solving" || phase === "dispatching" ? (
+            <div className="my-8 text-center text-xs text-slate-500">
+              <Loader2 className="mx-auto mb-2 animate-spin text-blue-600" size={28} />
+              {phase === "solving" ? "Optimizing routes... this takes about 10 seconds." : "Dispatching..."}
+            </div>
+          ) : plan && (phase === "review" || phase === "dispatched") ? (
             <>
               <div className="my-5 text-center">
                 <CheckCircle2 size={32} className="mx-auto rounded-full bg-emerald-50 p-1.5 text-emerald-600" />
-                <p className="mt-2 text-sm font-semibold">Route optimized</p>
-                <p className="text-xs text-slate-500">Your plan is ready to review and dispatch.</p>
+                <p className="mt-2 text-sm font-semibold">{phase === "dispatched" ? "Plan dispatched" : "Route optimized"}</p>
+                <p className="text-xs text-slate-500">
+                  {phase === "dispatched" ? "Vehicles are now on route." : "Your plan is ready to review and dispatch."}
+                </p>
               </div>
-              {/* Mock figures: the real ones will come from the plan returned by the optimizer. */}
               <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 text-xs">
                 {[
-                  ["Vehicles", chosenVehicles.length],
-                  ["Stops", chosenDeliveries.length],
-                  ["Est. distance", "84 km"],
-                  ["Est. time", "3h 24m"],
+                  ["Vehicles", plan.routes.length],
+                  ["Stops", plan.routes.reduce((s, r) => s + r.stops.length, 0)],
+                  ["Est. distance", `${plan.total_distance_km} km`],
+                  ["Est. time", formatDuration(plan.total_time_min)],
                 ].map(([k, v]) => (
                   <div key={k} className="bg-white p-3">
                     <dt className="text-slate-500">{k}</dt>
@@ -184,29 +221,90 @@ export default function RoutePlanningPage() {
                   </div>
                 ))}
               </dl>
+              {plan.distance_saved_pct != null && (
+                <p className="mt-3 text-center text-xs text-emerald-600">
+                  {plan.distance_saved_pct}% shorter than a nearest-neighbour plan
+                </p>
+              )}
+              {plan.unassigned.length > 0 && (
+                <p className="mt-2 flex items-center justify-center gap-1 text-xs text-amber-600">
+                  <AlertTriangle size={12} /> {plan.unassigned.length} order(s) could not be planned
+                </p>
+              )}
             </>
           ) : (
             <p className="my-8 text-center text-xs text-slate-400">
-              {canPlan ? "Selection changed. Regenerate the route." : "Select at least one vehicle and one delivery."}
+              {canPlan ? "Press Generate Route to optimize." : "Select at least one vehicle and one delivery."}
             </p>
           )}
 
           <button
-            onClick={regenerate}
+            onClick={generate}
             disabled={!canPlan}
             className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            <Sparkles size={14} /> Regenerate Route
+            <Sparkles size={14} /> {plan ? "Regenerate Route" : "Generate Route"}
           </button>
           <button
             onClick={dispatch}
-            disabled={!planned || !canPlan}
+            disabled={phase !== "review"}
             className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 py-2 text-sm font-semibold text-blue-600 hover:bg-blue-50 disabled:opacity-50"
           >
             <ArrowRight size={14} /> Dispatch Route
           </button>
         </aside>
       </div>
+
+      {/* The planned routes: one card per vehicle with its ordered stops */}
+      {plan && (phase === "review" || phase === "dispatched") && (
+        <section className="space-y-4">
+          <h3 className="text-lg font-bold">Planned routes</h3>
+          <PlanMap plan={plan} />
+          <div className="grid grid-cols-2 gap-4">
+            {plan.routes.map((r) => (
+              <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{r.vehicle.registration}</p>
+                    <p className="text-xs text-slate-500">{r.vehicle.model} · leaves {r.planned_departure}</p>
+                  </div>
+                  <div className="text-right text-xs text-slate-500">
+                    <p>Weight {r.weight_utilization_pct}%</p>
+                    <p>Volume {r.volume_utilization_pct}%</p>
+                  </div>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+                  <div className="h-1.5 rounded-full bg-blue-600" style={{ width: `${Math.min(100, Math.max(r.weight_utilization_pct, r.volume_utilization_pct))}%` }} />
+                </div>
+                <ol className="mt-3 space-y-1.5 text-xs">
+                  {r.stops.map((s) => (
+                    <li key={s.order_id} className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-50 font-semibold text-blue-600">{s.sequence}</span>
+                      <span className="flex-1 truncate font-medium">{s.customer}</span>
+                      <span className="text-slate-500">{s.planned_arrival}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+
+          {plan.unassigned.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+              <h4 className="flex items-center gap-2 text-sm font-semibold text-amber-800">
+                <AlertTriangle size={16} /> Unassigned orders
+              </h4>
+              <ul className="mt-2 space-y-1 text-xs text-amber-900">
+                {plan.unassigned.map((u) => (
+                  <li key={u.order_id}>
+                    <span className="font-semibold">{u.customer}</span> ({PRIORITY_LABEL[u.priority]}): {u.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

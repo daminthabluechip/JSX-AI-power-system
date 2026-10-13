@@ -1,9 +1,10 @@
 "use client";
 
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from "react-leaflet";
+import { useEffect } from "react";
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { LatLng } from "@/lib/mockData";
+import type { LatLng } from "@/lib/api";
 
 export type MapVehicle = {
   id: string;
@@ -29,6 +30,19 @@ const dot = (selected: boolean) =>
       box-shadow:0 1px 4px rgba(0,0,0,.4);background:${selected ? "#2563eb" : "#16a34a"}"></div>`,
   });
 
+// Zoom the map to show every vehicle and route. It only re-fits when the SET of vehicles changes,
+// not on every position update, so the map does not jump around while the user is looking at it.
+function FitToVehicles({ vehicles }: { vehicles: MapVehicle[] }) {
+  const map = useMap();
+  const signature = vehicles.map((v) => `${v.id}:${v.path.length}`).join("|");
+  useEffect(() => {
+    const points = vehicles.flatMap((v) => [v.position, ...v.path]);
+    if (points.length > 0) map.fitBounds(points, { padding: [40, 40], maxZoom: 11 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, signature]);
+  return null;
+}
+
 // Reusable Leaflet map showing vehicle markers and their planned routes.
 // Must run in the browser only, so import it through FleetMapLoader (ssr: false).
 export default function FleetMap({ vehicles, selectedId, onSelect, className }: Props) {
@@ -43,6 +57,8 @@ export default function FleetMap({ vehicles, selectedId, onSelect, className }: 
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
+
+      <FitToVehicles vehicles={vehicles} />
 
       {vehicles.map((v) => (
         <div key={v.id}>
