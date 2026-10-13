@@ -1,6 +1,10 @@
 from ..extensions import db
 
 
+# Kinds of vehicle. An order can require one of these (see Order.required_vehicle_type).
+VEHICLE_TYPES = ["truck", "van", "refrigerated", "flatbed"]
+
+
 class Vehicle(db.Model):
     """A truck in the fleet, with capacities the optimizer must respect."""
     __tablename__ = "vehicles"

@@ -17,5 +17,7 @@ class Order(db.Model):
     target_date = db.Column(db.Date, nullable=False)
     earliest_arrival = db.Column(db.Time)   # customer time window start
     latest_arrival = db.Column(db.Time)     # customer time window end
+    # Optional: only a vehicle of this type may deliver the order (e.g. "refrigerated").
+    required_vehicle_type = db.Column(db.String(30))
     # pending | scheduled | in_transit | delivered | cancelled
     status = db.Column(db.String(20), nullable=False, default="pending")

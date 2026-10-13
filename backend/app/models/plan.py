@@ -10,11 +10,14 @@ class Plan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     planning_date = db.Column(db.Date, nullable=False)
     version = db.Column(db.Integer, nullable=False, default=1)
-    # queued | solving | ready | failed | dispatched
+    # queued | solving | ready | failed | dispatched | superseded (a newer plan was dispatched)
     status = db.Column(db.String(20), nullable=False, default="queued")
     total_distance_km = db.Column(db.Float)
     total_time_min = db.Column(db.Float)
     solve_time_s = db.Column(db.Float)   # logged to check the 30s / 15s targets
+    baseline_distance_km = db.Column(db.Float)  # nearest-neighbour plan, to show the savings
+    unassigned = db.Column(db.JSON)      # [{"order_id": 3, "reason": "..."}]
+    error = db.Column(db.String(500))    # set when status == failed
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     routes = db.relationship("Route", backref="plan", cascade="all, delete-orphan")
 
@@ -29,6 +32,10 @@ class Route(db.Model):
     planned_departure = db.Column(db.DateTime)
     load_kg = db.Column(db.Float, default=0)
     volume_m3 = db.Column(db.Float, default=0)
+    # Where the vehicle starts. NULL = the depot; set when a re-plan starts from the vehicle's
+    # current position (a vehicle that is already on the road).
+    start_latitude = db.Column(db.Float)
+    start_longitude = db.Column(db.Float)
     stops = db.relationship("Stop", backref="route", order_by="Stop.sequence",
                             cascade="all, delete-orphan")
 
@@ -43,3 +50,6 @@ class Stop(db.Model):
     sequence = db.Column(db.Integer, nullable=False)
     planned_arrival = db.Column(db.DateTime)
     planned_departure = db.Column(db.DateTime)
+    # When the vehicle really reached this stop (from tracking). NULL until it gets there.
+    # Compared with the customer's window to measure on-time delivery in the reports.
+    actual_arrival = db.Column(db.DateTime)
