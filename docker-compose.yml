@@ -1,4 +1,7 @@
-# Local development services. Run: docker compose up -d db
+# Whole app:   docker compose up --build
+#   dashboard  http://localhost:3000        API  http://127.0.0.1:5000
+# Sample data: docker compose run --rm backend flask --app wsgi seed --reset
+# Only the database (for local development without containers): docker compose up -d db
 services:
   db:
     image: postgres:16
@@ -7,9 +10,36 @@ services:
       POSTGRES_PASSWORD: transport
       POSTGRES_DB: transport
     ports:
-      - "5432:5432"
+      - "5433:5432"     # 5433 on your machine, so it does not clash with a local PostgreSQL on 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transport"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://transport:transport@db:5432/transport
+      CORS_ORIGIN: http://localhost:3000
+      # ROUTING_PROVIDER: osrm        # real road distances instead of the offline estimate
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://127.0.0.1:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:
