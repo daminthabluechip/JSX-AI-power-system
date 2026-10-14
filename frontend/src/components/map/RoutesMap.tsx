@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { MapContainer, Marker, Polyline, TileLayer, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -54,7 +54,7 @@ export default function RoutesMap({ routes, depot, hiddenVehicleIds = [], classN
       <FitToRoutes points={points} />
 
       {visible.map(({ route, color }) => (
-        <div key={route.id}>
+        <Fragment key={route.id}>
           <Polyline positions={route.path} pathOptions={{ color, weight: 4, opacity: 0.8 }} />
           {route.stops.map((s) => (
             <Marker key={s.order_id} position={[s.latitude, s.longitude]} icon={stopIcon(s.sequence, color)}>
@@ -63,7 +63,7 @@ export default function RoutesMap({ routes, depot, hiddenVehicleIds = [], classN
               </Tooltip>
             </Marker>
           ))}
-        </div>
+        </Fragment>
       ))}
 
       {depot && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -61,7 +61,7 @@ export default function FleetMap({ vehicles, selectedId, onSelect, className }: 
       <FitToVehicles vehicles={vehicles} />
 
       {vehicles.map((v) => (
-        <div key={v.id}>
+        <Fragment key={v.id}>
           {/* Planned route as a dashed blue line */}
           {v.path.length > 1 && (
             <Polyline positions={v.path} pathOptions={{ color: "#2563eb", dashArray: "6 8", weight: 3 }} />
@@ -73,7 +73,7 @@ export default function FleetMap({ vehicles, selectedId, onSelect, className }: 
           >
             <Tooltip>{v.id}</Tooltip>
           </Marker>
-        </div>
+        </Fragment>
       ))}
     </MapContainer>
   );
