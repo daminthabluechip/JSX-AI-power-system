@@ -29,6 +29,7 @@ def create_app(config_class=Config):
     # API routes.
     from .api.helpers import register_error_handlers
     from .api.events import bp as events_bp
+    from .api.notifications import bp as notifications_bp
     from .api.orders import bp as orders_bp
     from .api.plans import bp as plans_bp
     from .api.reports import bp as reports_bp
@@ -42,6 +43,7 @@ def create_app(config_class=Config):
     app.register_blueprint(events_bp)
     app.register_blueprint(tracking_bp)
     app.register_blueprint(reports_bp)
+    app.register_blueprint(notifications_bp)
 
     register_cli(app)
     return app

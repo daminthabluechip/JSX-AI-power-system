@@ -95,6 +95,13 @@ for moving an order to a different vehicle, so a small disruption does not reshu
 Once a plan has been dispatched, a re-plan starts each vehicle from its latest reported position,
 no earlier than "now", and only plans orders that are not yet delivered.
 
+**Unassigned orders.** When a plan cannot fit every order, the unassigned orders are listed with a
+reason. Each plan remembers which vehicles it considered; if a vehicle that it did not consider
+becomes available later (a new vehicle, one back from maintenance, one that finished its route) and
+could carry some of those orders, a notification appears under the bell icon and in the unassigned
+box, with a one-click "Re-plan with this vehicle" (a `vehicle_available` event). The notice
+disappears by itself once a re-plan has considered that vehicle.
+
 **Tracking.** Every position goes through one function (`tracking_service.ingest`, also
 `POST /tracking/positions`). Today the built-in simulator produces them; a real tracking feed only
 needs to call the same endpoint. The system compares each vehicle's position with where the plan
@@ -115,7 +122,8 @@ data it says so rather than inventing a figure.
 | `GET /plans`, `GET /plans/{id}` | plan with routes, stops, arrival times, utilization |
 | `GET /plans/{id}/compare/{other}` | what changed between two plan versions |
 | `POST /plans/{id}/dispatch` | send a plan to the vehicles |
-| `POST /events`, `GET /events` | report a disruption (triggers a re-plan) |
+| `POST /events`, `GET /events` | report a disruption (triggers a re-plan): `delay`, `breakdown`, `rush_order`, `cancellation`, `vehicle_available` |
+| `GET /notifications` | e.g. "VH-5120 is available and could take 2 of the 3 unassigned orders" |
 | `GET /tracking/positions`, `GET /tracking/alerts`, `POST /tracking/positions` | live view and feed entry point |
 | `POST /tracking/simulator` | `start`, `stop`, `delay`, `reset` |
 | `GET /reports`, `GET /reports/export` | analytics and CSV download |

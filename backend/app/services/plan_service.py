@@ -113,6 +113,8 @@ def run_plan(app, plan_id, vehicle_ids, order_ids, time_limit_s, shift_overrides
 
         vehicles, orders, coords = load_problem(
             plan.planning_date, vehicle_ids, order_ids, shift_overrides, starts)
+        plan.vehicle_ids = [v.id for v in vehicles]   # remember who was considered (see Plan.vehicle_ids)
+        db.session.commit()
 
         # TODO: TOOL/API CALL HERE - the routing provider (OSRM/ORS) is called inside matrix()
         # when ROUTING_PROVIDER=osrm; results are cached per pair.
@@ -146,7 +148,8 @@ def save_result(plan, result, baseline, coords=None):
 
     for r in result.routes:
         route = Route(plan_id=plan.id, vehicle_id=r.vehicle_id, planned_departure=at(r.departure),
-                      load_kg=r.load_kg, volume_m3=r.volume_m3)
+                      load_kg=r.load_kg, volume_m3=r.volume_m3,
+                      distance_km=round(r.distance_m / 1000, 2), return_time=at(r.return_time))
         if r.start_node:   # started from a vehicle position instead of the depot
             route.start_latitude, route.start_longitude = coords[r.start_node]
         route.stops = [Stop(order_id=s.order_id, sequence=s.sequence,

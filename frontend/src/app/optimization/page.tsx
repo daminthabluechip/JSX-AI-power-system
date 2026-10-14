@@ -56,6 +56,7 @@ function scenariosFor(plan: Plan | null): Scenario[] {
 
 const EVENT_LABEL: Record<EventType, string> = {
   delay: "Delay reported", breakdown: "Vehicle breakdown", rush_order: "Rush order added", cancellation: "Order cancelled",
+  vehicle_available: "Vehicle became available",
 };
 
 const CHANGE_STYLE: Record<string, string> = {

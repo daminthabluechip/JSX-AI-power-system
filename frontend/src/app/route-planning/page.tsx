@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import ErrorBox from "@/components/ui/ErrorBox";
 import PlanMap from "@/components/map/PlanMap";
+import RouteExplanation from "@/components/plan/RouteExplanation";
+import VehicleAvailableOffers from "@/components/notifications/VehicleAvailableOffers";
 import {
   api, formatDuration, PRIORITY_LABEL, STATUS_LABEL, todayISO, VEHICLE_TYPE_LABEL, waitForPlan,
   type Plan, type Priority,
 } from "@/lib/api";
-import { useApi } from "@/lib/useApi";
+import { useApi, usePolling } from "@/lib/useApi";
 
 const PRIORITY_STYLE: Record<Priority, string> = {
   critical: "bg-red-50 text-red-600",
@@ -23,17 +26,40 @@ type Phase = "select" | "solving" | "review" | "dispatching" | "dispatched";
 const toggle = (list: number[], id: number) =>
   list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
-// Route Planning: pick vehicles + orders, run the optimizer, review the plan, dispatch it.
+// The page can be opened on an existing plan with /route-planning?plan=12 (the bell menu links here
+// after re-planning). Load that plan first, then start the page with it already in the review step.
 export default function RoutePlanningPage() {
+  return (
+    <Suspense fallback={null}>
+      <RoutePlanningLoader />
+    </Suspense>
+  );
+}
+
+function RoutePlanningLoader() {
+  const planId = useSearchParams().get("plan");
+  const linked = useApi(() => (planId ? api.plans.get(Number(planId)) : Promise.resolve(null)), [planId]);
+  if (planId && linked.loading) return <p className="text-sm text-slate-400">Loading plan...</p>;
+  return <RoutePlanningContent key={planId ?? "new"} initialPlan={linked.data} />;
+}
+
+// Route Planning: pick vehicles + orders, run the optimizer, review the plan, dispatch it.
+function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
   const vehicles = useApi(() => api.vehicles.list());
   const orders = useApi(() => api.orders.list(todayISO()));
 
   // null = "the user has not changed the selection yet", so the defaults below apply.
   const [vehicleSel, setVehicleSel] = useState<number[] | null>(null);
   const [orderSel, setOrderSel] = useState<number[] | null>(null);
-  const [phase, setPhase] = useState<Phase>("select");
-  const [plan, setPlan] = useState<Plan | null>(null);
+  const reviewable = initialPlan && (initialPlan.status === "ready" || initialPlan.status === "dispatched");
+  const [phase, setPhase] = useState<Phase>(reviewable ? (initialPlan.status === "dispatched" ? "dispatched" : "review") : "select");
+  const [plan, setPlan] = useState<Plan | null>(reviewable ? initialPlan : null);
+  // Vehicles that became available while this plan has unassigned orders (checked every 6 seconds)
+  const offers = usePolling(() => api.notifications.list(), 6000);
+  const planOffers = (offers.data?.items ?? []).filter((n) => n.plan_id === plan?.id);
   const [error, setError] = useState<string | null>(null);
+  // Shown after "Re-plan with <vehicle>": how many unassigned orders that vehicle managed to take
+  const [replanNotice, setReplanNotice] = useState<string | null>(null);
 
   // Only vehicles that can drive, and orders that still need a plan.
   const usableVehicles = (vehicles.data?.items ?? []).filter((v) => v.status !== "maintenance");
@@ -56,6 +82,7 @@ export default function RoutePlanningPage() {
 
   async function generate() {
     setError(null);
+    setReplanNotice(null);
     setPhase("solving");
     try {
       // POST /plans/generate starts the optimizer in the background (202) ...
@@ -259,6 +286,9 @@ export default function RoutePlanningPage() {
       {plan && (phase === "review" || phase === "dispatched") && (
         <section className="space-y-4">
           <h3 className="text-lg font-bold">Planned routes</h3>
+          {replanNotice && (
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm font-medium text-blue-900">{replanNotice}</p>
+          )}
           <PlanMap plan={plan} />
           <div className="grid grid-cols-2 gap-4">
             {plan.routes.map((r) => (
@@ -285,6 +315,8 @@ export default function RoutePlanningPage() {
                     </li>
                   ))}
                 </ol>
+                {/* Plain-language explanation of this vehicle's trip (open by default for small plans) */}
+                <RouteExplanation route={r} defaultOpen={plan.routes.length <= 3} />
               </div>
             ))}
           </div>
@@ -301,6 +333,30 @@ export default function RoutePlanningPage() {
                   </li>
                 ))}
               </ul>
+
+              {/* Tell the dispatcher when another vehicle could take these orders, and let them act on it */}
+              <div className="mt-4 border-t border-amber-200 pt-3">
+                {planOffers.length > 0 ? (
+                  <VehicleAvailableOffers
+                    notes={planOffers}
+                    onDone={(newPlan, note) => {
+                      setPlan(newPlan); // show the new plan in place of this one
+                      setPhase("review");
+                      const planned = note.unassigned_total - newPlan.unassigned.length;
+                      setReplanNotice(
+                        `New plan v${newPlan.version} with ${note.vehicle.registration}: ${planned} of ${note.unassigned_total} ` +
+                          `previously unassigned orders are now planned` +
+                          (newPlan.unassigned.length > 0 ? `; ${newPlan.unassigned.length} still could not be.` : ".")
+                      );
+                    }}
+                  />
+                ) : (
+                  <p className="text-xs text-amber-800">
+                    No other vehicle is available right now. You will be notified here, and under the bell icon at the top,
+                    as soon as a vehicle becomes available that could take these orders.
+                  </p>
+                )}
+              </div>
             </div>
           )}
         </section>

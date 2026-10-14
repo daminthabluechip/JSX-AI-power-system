@@ -17,6 +17,9 @@ class Plan(db.Model):
     solve_time_s = db.Column(db.Float)   # logged to check the 30s / 15s targets
     baseline_distance_km = db.Column(db.Float)  # nearest-neighbour plan, to show the savings
     unassigned = db.Column(db.JSON)      # [{"order_id": 3, "reason": "..."}]
+    # Ids of the vehicles the optimizer was allowed to use for this plan. A vehicle that is available
+    # now but NOT in this list became available later: that is what triggers the "vehicle available" notice.
+    vehicle_ids = db.Column(db.JSON)
     error = db.Column(db.String(500))    # set when status == failed
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     routes = db.relationship("Route", backref="plan", cascade="all, delete-orphan")
@@ -32,6 +35,8 @@ class Route(db.Model):
     planned_departure = db.Column(db.DateTime)
     load_kg = db.Column(db.Float, default=0)
     volume_m3 = db.Column(db.Float, default=0)
+    distance_km = db.Column(db.Float)      # driving distance of this vehicle's whole trip
+    return_time = db.Column(db.DateTime)   # when it is back at the depot
     # Where the vehicle starts. NULL = the depot; set when a re-plan starts from the vehicle's
     # current position (a vehicle that is already on the road).
     start_latitude = db.Column(db.Float)

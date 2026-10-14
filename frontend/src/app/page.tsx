@@ -18,6 +18,7 @@ const STATUS_STYLE: Record<OrderStatus, string> = {
 
 const EVENT_TITLE: Record<EventType, string> = {
   delay: "Delay reported", breakdown: "Vehicle breakdown", rush_order: "Rush order added", cancellation: "Order cancelled",
+  vehicle_available: "Vehicle became available",
 };
 
 // "5 min ago" style text for the activity list. Event times are stored in UTC.

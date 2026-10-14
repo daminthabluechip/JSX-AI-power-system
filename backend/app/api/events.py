@@ -1,6 +1,7 @@
 """/events endpoints: report a disruption, which triggers a re-plan.
 
-Supported types (from the proposal):
+Supported types:
+  vehicle_available vehicle_id               a vehicle can be used again (or is new): re-plan with it
   delay         vehicle_id + delay_minutes   the vehicle cannot leave until that much later
   breakdown     vehicle_id                   vehicle is taken out of service
   rush_order    order {...}                  a new urgent order must be added
@@ -24,7 +25,7 @@ from .plans import plan_summary
 
 bp = Blueprint("events", __name__, url_prefix="/events")
 
-TYPES = ["delay", "breakdown", "rush_order", "cancellation"]
+TYPES = ["delay", "breakdown", "rush_order", "cancellation", "vehicle_available"]
 
 
 def event_to_dict(e):
@@ -74,6 +75,16 @@ def apply_event(body, plan):
             base = (route.planned_departure.hour * 60 + route.planned_departure.minute
                     if route else minutes(vehicle.shift_start, 7 * 60))
             overrides[vehicle.id] = base + delay
+
+    elif kind == "vehicle_available":
+        # No data to change: the vehicle is already "available", so the re-plan below (which uses every
+        # available vehicle and every order still waiting, including the unassigned ones) picks it up.
+        vehicle = db.session.get(Vehicle, as_id(body.get("vehicle_id"))) if as_id(body.get("vehicle_id")) else None
+        if vehicle is None:
+            return None, fail("vehicle_id", "existing vehicle required")
+        if vehicle.status != "available":
+            return None, fail("vehicle_id", f"vehicle is {vehicle.status}, not available", 409)
+        event.vehicle_id = vehicle.id
 
     elif kind == "cancellation":
         order = db.session.get(Order, as_id(body.get("order_id"))) if as_id(body.get("order_id")) else None

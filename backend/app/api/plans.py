@@ -49,8 +49,12 @@ def plan_detail(p):
             # start point -> each stop in order -> back to the depot (for drawing the route on a map)
             "path": ([start] + stop_xy + [depot_xy]) if depot_xy else stop_xy,
             "id": r.id,
-            "vehicle": {"id": v.id, "registration": v.registration, "model": v.model, "driver": v.driver},
+            "vehicle": {"id": v.id, "registration": v.registration, "model": v.model, "driver": v.driver,
+                        "vehicle_type": v.vehicle_type, "weight_capacity_kg": v.weight_capacity_kg,
+                        "volume_capacity_m3": v.volume_capacity_m3},
             "planned_departure": r.planned_departure.strftime("%H:%M"),
+            "return_time": r.return_time.strftime("%H:%M") if r.return_time else None,
+            "distance_km": r.distance_km,
             "load_kg": r.load_kg,
             "volume_m3": r.volume_m3,
             # how full the vehicle is, as a percentage of its capacity
@@ -64,6 +68,11 @@ def plan_detail(p):
                 "latitude": orders[s.order_id].latitude,
                 "longitude": orders[s.order_id].longitude,
                 "priority": orders[s.order_id].priority,
+                # what the customer asked for, so a route can be explained against it
+                "window_start": fmt_time(orders[s.order_id].earliest_arrival),
+                "window_end": fmt_time(orders[s.order_id].latest_arrival),
+                "weight_kg": orders[s.order_id].weight_kg,
+                "required_vehicle_type": orders[s.order_id].required_vehicle_type,
                 "planned_arrival": s.planned_arrival.strftime("%H:%M"),
                 "planned_departure": s.planned_departure.strftime("%H:%M"),
             } for s in r.stops],

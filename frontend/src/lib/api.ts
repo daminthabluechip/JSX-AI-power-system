@@ -68,6 +68,10 @@ export type PlanStop = {
   latitude: number;
   longitude: number;
   priority: Priority;
+  window_start: string | null; // the customer's delivery window, "HH:MM"
+  window_end: string | null;
+  weight_kg: number;
+  required_vehicle_type: VehicleType | null;
   planned_arrival: string;
   planned_departure: string;
 };
@@ -75,8 +79,18 @@ export type PlanStop = {
 export type PlanRoute = {
   id: number;
   path: LatLng[]; // start point -> stops in order -> depot, for drawing the route
-  vehicle: { id: number; registration: string; model: string | null; driver: string | null };
+  vehicle: {
+    id: number;
+    registration: string;
+    model: string | null;
+    driver: string | null;
+    vehicle_type: VehicleType;
+    weight_capacity_kg: number;
+    volume_capacity_m3: number;
+  };
   planned_departure: string;
+  return_time: string | null; // back at the depot
+  distance_km: number | null; // driving distance of this vehicle's whole trip
   load_kg: number;
   volume_m3: number;
   weight_utilization_pct: number;
@@ -175,7 +189,19 @@ export type ImportResult = {
   errors: { row: number; errors: Record<string, string> }[]; // row numbers like a spreadsheet (header = 1)
 };
 
-export type EventType = "delay" | "breakdown" | "rush_order" | "cancellation";
+export type EventType = "delay" | "breakdown" | "rush_order" | "cancellation" | "vehicle_available";
+
+// Something the dispatcher should know about. Today: a vehicle became available that could take
+// orders the latest plan had to leave unassigned.
+export type AppNotification = {
+  type: "vehicle_available";
+  plan_id: number; // the plan that has the unassigned orders
+  vehicle: { id: number; registration: string; model: string | null; vehicle_type: VehicleType; weight_capacity_kg: number };
+  orders: { order_id: number; customer: string; priority: Priority; weight_kg: number }[]; // what it could take
+  unassigned_total: number;
+  message: string;
+  suggested_event: Record<string, unknown>; // body to POST to /events to re-plan with this vehicle
+};
 
 export type DisruptionEvent = {
   id: number;
@@ -290,6 +316,9 @@ export const api = {
     alerts: () => request<{ items: DelayAlert[] }>("/tracking/alerts"),
     // action: start {time?, speed?} | stop | delay {vehicle_id, minutes} | reset
     simulator: (body: Record<string, unknown>) => post<SimulatorStatus>("/tracking/simulator", body),
+  },
+  notifications: {
+    list: () => request<{ items: AppNotification[] }>("/notifications"),
   },
   events: {
     list: (limit = 20) => request<{ items: DisruptionEvent[] }>(`/events?limit=${limit}`),
