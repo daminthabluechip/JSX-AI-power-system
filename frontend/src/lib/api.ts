@@ -57,7 +57,10 @@ export type PlanSummary = {
   total_time_min: number | null;
   solve_time_s: number | null;
   baseline_distance_km: number | null;
-  distance_saved_pct: number | null;
+  distance_saved_pct: number | null; // total km vs the simple plan (misleading if they serve different numbers of orders)
+  served: number; // orders on a route in this plan
+  baseline_served: number | null; // orders the simple plan managed to serve
+  distance_saved_per_order_pct: number | null; // km per delivered order vs the simple plan: the fair comparison
 };
 
 export type PlanStop = {

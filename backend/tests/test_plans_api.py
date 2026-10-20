@@ -97,3 +97,17 @@ def test_plan_detail_has_what_a_route_explanation_needs(app, client):
         for stop in route["stops"]:
             assert stop["window_start"] <= stop["planned_arrival"] <= stop["window_end"]   # the rule, visible
             assert stop["weight_kg"] > 0
+
+
+def test_plan_summary_compares_per_delivered_order_not_just_total_km(app, client):
+    """Total km is unfair when the plans serve different numbers of orders, so a per-order figure is given."""
+    seed(date(2026, 10, 14))
+    pid = client.post("/plans/generate", json={"date": "2026-10-14", "time_limit_s": 2}).get_json()["id"]
+    p = client.get(f"/plans/{pid}").get_json()
+
+    assert p["served"] == sum(len(r["stops"]) for r in p["routes"])
+    assert isinstance(p["baseline_served"], int) and p["baseline_served"] > 0
+    expected = round(100 * (1 - (p["total_distance_km"] / p["served"]) / (p["baseline_distance_km"] / p["baseline_served"])), 1)
+    assert p["distance_saved_per_order_pct"] == expected
+    if p["served"] > p["baseline_served"]:     # serving more orders makes total km look worse than per-order km
+        assert p["distance_saved_per_order_pct"] > p["distance_saved_pct"]

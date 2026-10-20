@@ -248,10 +248,23 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
                   </div>
                 ))}
               </dl>
-              {plan.distance_saved_pct != null && (
-                <p className="mt-3 text-center text-xs text-emerald-600">
-                  {plan.distance_saved_pct}% shorter than a nearest-neighbour plan
+              {/* Compare with the simple "nearest stop next" plan. If the two serve different numbers of orders,
+                  total kilometres are not comparable, so compare kilometres per delivered order instead. */}
+              {plan.baseline_served != null && plan.served !== plan.baseline_served && plan.distance_saved_per_order_pct != null ? (
+                <p className="mt-3 text-center text-xs text-emerald-700">
+                  Serves {plan.served} orders; a simple plan serves {plan.baseline_served}.{" "}
+                  {plan.distance_saved_per_order_pct >= 0
+                    ? `${plan.distance_saved_per_order_pct}% shorter per delivered order.`
+                    : `${Math.abs(plan.distance_saved_per_order_pct)}% longer per delivered order.`}
                 </p>
+              ) : (
+                plan.distance_saved_pct != null && (
+                  <p className="mt-3 text-center text-xs text-emerald-600">
+                    {plan.distance_saved_pct >= 0
+                      ? `${plan.distance_saved_pct}% shorter than a nearest-neighbour plan`
+                      : `${Math.abs(plan.distance_saved_pct)}% longer than a nearest-neighbour plan`}
+                  </p>
+                )
               )}
               {plan.unassigned.length > 0 && (
                 <p className="mt-2 flex items-center justify-center gap-1 text-xs text-amber-600">

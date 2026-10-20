@@ -42,6 +42,8 @@ services:
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     plan: free
+    # The website can be password-protected, so Render's health check must use a file that is always public.
+    healthCheckPath: /favicon.ico
     envVars:
       - key: NEXT_PUBLIC_API_URL
         value: /api
