@@ -1,5 +1,15 @@
 """App configuration, read from environment variables (see .env.example)."""
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load backend/.env BEFORE the Config class below is defined: its settings are read from the
+# environment at the moment this file is imported, so loading .env later (e.g. inside create_app)
+# would be too late and the file would be silently ignored. Variables already set in the real
+# environment (Docker, CI, a shell) are not overwritten, so they win over .env. ENV_FILE lets a
+# different file be used (the tests do this).
+load_dotenv(os.getenv("ENV_FILE") or Path(__file__).resolve().parent.parent / ".env")
 
 
 class Config:
@@ -24,6 +34,9 @@ class Config:
 class TestConfig(Config):
     """Tests use an in-memory SQLite database so they need no running PostgreSQL."""
     TESTING = True
+    # Tests must never depend on the network or on what a developer put in .env
+    ROUTING_PROVIDER = "haversine"
+    OSRM_TIME_FACTOR = 1.0
     PLAN_SYNC = True
     SOLVER_TIME_LIMIT_S = 3
     REPLAN_TIME_LIMIT_S = 2
