@@ -4,7 +4,7 @@ Run with:  flask --app wsgi seed        (add --reset to wipe and reload)
 A fixed random seed makes the data identical on every run, so results are repeatable.
 """
 import random
-from datetime import date, time
+from datetime import date, time, timedelta
 
 from app.extensions import db
 from app.models import Depot, Event, Order, Plan, Position, Route, Stop, Vehicle
@@ -52,10 +52,8 @@ def reset():
     db.session.commit()
 
 
-def seed(day=None):
-    rng = random.Random(42)
-    day = day or date.today()
-
+def add_fleet():
+    """Create the depot and the 10 sample vehicles."""
     depot = Depot(**DEPOT)
     db.session.add(depot)
     db.session.flush()  # gives depot.id
@@ -67,6 +65,10 @@ def seed(day=None):
             status=status, depot_id=depot.id,
         ))
 
+
+def add_orders(day):
+    """Create the 50 sample orders for one day (the same 50 every time: the random seed is fixed)."""
+    rng = random.Random(42)
     for i in range(50):
         town, lat, lon = rng.choice(TOWNS)
         start, end = rng.choice(WINDOWS)
@@ -86,4 +88,31 @@ def seed(day=None):
             latest_arrival=end,
             status="pending",
         ))
+
+
+def seed(day=None):
+    """Depot + vehicles + 50 orders for `day` (default today). Use reset() first to start clean."""
+    add_fleet()
+    add_orders(day or date.today())
     db.session.commit()
+
+
+def ensure_demo(days_around=1):
+    """Make sure a demo always has something to plan, without deleting anything.
+
+    Creates the depot and vehicles if they are missing, and adds the 50 sample orders for each day
+    from `days_around` days ago to `days_around` days ahead that has no orders yet. Several days
+    because "today" differs by timezone (the server may be on UTC while the user is in Sri Lanka),
+    and the demo must still open on a day with orders. Safe to run on every start-up.
+    Returns the list of days that were filled.
+    """
+    if Depot.query.first() is None:
+        add_fleet()
+    filled = []
+    for offset in range(-days_around, days_around + 1):
+        day = date.today() + timedelta(days=offset)
+        if Order.query.filter_by(target_date=day).count() == 0:
+            add_orders(day)
+            filled.append(day)
+    db.session.commit()
+    return filled

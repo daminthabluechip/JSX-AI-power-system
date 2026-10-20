@@ -18,6 +18,14 @@ def plan_summary(p):
     saved = None
     if p.baseline_distance_km and p.total_distance_km is not None:
         saved = round(100 * (1 - p.total_distance_km / p.baseline_distance_km), 1)
+
+    # Total kilometres are not a fair comparison when the two plans serve different numbers of orders:
+    # the optimizer would rather drive further than leave an order out, while the baseline simply skips
+    # it. Kilometres per delivered order compares like with like.
+    served = sum(len(r.stops) for r in p.routes)
+    per_order_saved = None
+    if p.baseline_served and served and p.baseline_distance_km and p.total_distance_km is not None:
+        per_order_saved = round(100 * (1 - (p.total_distance_km / served) / (p.baseline_distance_km / p.baseline_served)), 1)
     return {
         "id": p.id,
         "planning_date": p.planning_date.isoformat(),
@@ -28,7 +36,10 @@ def plan_summary(p):
         "total_time_min": p.total_time_min,
         "solve_time_s": p.solve_time_s,
         "baseline_distance_km": p.baseline_distance_km,
-        "distance_saved_pct": saved,  # vs. the nearest-neighbour baseline
+        "distance_saved_pct": saved,  # total km vs. the nearest-neighbour baseline (can mislead, see above)
+        "served": served,
+        "baseline_served": p.baseline_served,
+        "distance_saved_per_order_pct": per_order_saved,  # km per delivered order vs. the baseline
     }
 
 

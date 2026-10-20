@@ -16,6 +16,9 @@ class Plan(db.Model):
     total_time_min = db.Column(db.Float)
     solve_time_s = db.Column(db.Float)   # logged to check the 30s / 15s targets
     baseline_distance_km = db.Column(db.Float)  # nearest-neighbour plan, to show the savings
+    # How many orders the nearest-neighbour plan managed to serve. The optimizer often serves MORE orders,
+    # so comparing total kilometres alone is unfair: see plan_summary().
+    baseline_served = db.Column(db.Integer)
     unassigned = db.Column(db.JSON)      # [{"order_id": 3, "reason": "..."}]
     # Ids of the vehicles the optimizer was allowed to use for this plan. A vehicle that is available
     # now but NOT in this list became available later: that is what triggers the "vehicle available" notice.

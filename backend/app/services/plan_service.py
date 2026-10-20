@@ -161,6 +161,7 @@ def save_result(plan, result, baseline, coords=None):
     plan.total_time_min = result.total_time_min
     plan.solve_time_s = result.solve_time_s
     plan.baseline_distance_km = baseline.total_distance_km
+    plan.baseline_served = sum(len(r.stops) for r in baseline.routes)
     plan.unassigned = result.unassigned
     plan.status = "ready"
     db.session.commit()

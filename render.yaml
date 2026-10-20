@@ -1,0 +1,59 @@
+# Render "Blueprint": creates the database and both services from this one file.
+# See docs in the chat / README: New + > Blueprint > pick this repository.
+#
+# Layout:   browser --> jsx-transport-web (the website) --forwards /api/*--> jsx-transport-api (Flask) --> database
+# Only the website is meant to be opened. The API refuses any request that does not carry API_KEY, and
+# the website's server (not the browser) adds that key.
+databases:
+  - name: transport-db
+    plan: free              # free databases expire after a set period; see Render's current terms
+    databaseName: transport
+    user: transport
+
+services:
+  # ---------------- backend: Flask API + optimizer ----------------
+  - type: web
+    name: jsx-transport-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: transport-db
+          property: connectionString
+      - key: API_KEY
+        generateValue: true          # Render invents a long random secret
+      - key: DEMO_MODE
+        value: "true"                # load sample data for today on start; shows "Reset demo data"
+      - key: ROUTING_PROVIDER
+        value: haversine             # offline estimate = reliable. Change to "osrm" for real road distances
+      - key: OSRM_TIME_FACTOR
+        value: "1.3"
+      - key: SOLVER_TIME_LIMIT_S
+        value: "10"
+
+  # ---------------- frontend: the website ----------------
+  - type: web
+    name: jsx-transport-web
+    runtime: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: /api
+      - key: BACKEND_URL
+        sync: false                  # you are asked for it when creating the Blueprint:
+                                     #   https://jsx-transport-api.onrender.com  (the API's address)
+      - key: API_KEY
+        fromService:
+          type: web
+          name: jsx-transport-api
+          envVarKey: API_KEY         # same secret as the backend
+      - key: BASIC_AUTH_PASSWORD
+        sync: false                  # you are asked for it: the password your mentor types
+      - key: BASIC_AUTH_USER
+        value: mentor

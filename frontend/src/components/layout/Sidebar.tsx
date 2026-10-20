@@ -11,7 +11,12 @@ import {
   MapPin,
   BarChart3,
   LifeBuoy,
+  RotateCcw,
 } from "lucide-react";
+import { useState } from "react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { api } from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 
 // Navigation items, in the same order as the design mockups.
 const NAV = [
@@ -26,6 +31,9 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  // On a shared demo the backend says so, and we offer a way to start over with fresh sample data.
+  const demo = useApi(() => api.demo.status().catch(() => ({ enabled: false })));
+  const [resetting, setResetting] = useState(false);
 
   // "/" must match exactly; other items match any nested path.
   const isActive = (href: string) =>
@@ -70,6 +78,15 @@ export default function Sidebar() {
           </a>
         </div>
 
+        {demo.data?.enabled && (
+          <button
+            onClick={() => setResetting(true)}
+            className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <RotateCcw size={14} /> Reset demo data
+          </button>
+        )}
+
         {/* TODO: TOOL/API CALL HERE - replace with the logged-in user once auth exists. */}
         <div className="flex items-center gap-2 px-1">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold">
@@ -81,6 +98,18 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
+      {resetting && (
+        <ConfirmDialog
+          title="Reset demo data"
+          message="This deletes all vehicles, orders, plans and events and loads the sample data again. Continue?"
+          confirmLabel="Reset"
+          onClose={() => setResetting(false)}
+          onConfirm={async () => {
+            await api.demo.reset();
+            window.location.reload(); // every screen shows the fresh data
+          }}
+        />
+      )}
     </aside>
   );
 }

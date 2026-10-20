@@ -317,6 +317,12 @@ export const api = {
     // action: start {time?, speed?} | stop | delay {vehicle_id, minutes} | reset
     simulator: (body: Record<string, unknown>) => post<SimulatorStatus>("/tracking/simulator", body),
   },
+  demo: {
+    // enabled = this is a shared demo installation (the backend's DEMO_MODE is on)
+    status: () => request<{ enabled: boolean }>("/demo"),
+    // delete everything and load the sample data again
+    reset: () => post<{ reset: boolean }>("/demo/reset"),
+  },
   notifications: {
     list: () => request<{ items: AppNotification[] }>("/notifications"),
   },
