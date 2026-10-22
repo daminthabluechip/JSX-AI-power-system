@@ -11,8 +11,6 @@ export const metadata: Metadata = {
   description: "Plan, optimize and track deliveries",
 };
 
-// Root layout: fixed sidebar on the left, top bar + page content on the right.
-// Every page in src/app/* renders inside <main>.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full antialiased`}>

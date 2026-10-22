@@ -7,7 +7,6 @@ DAY = "2026-10-14"
 
 
 def make_plan(client):
-    """Seed data, generate the first plan and return its (finished) detail."""
     seed(date(2026, 10, 14))
     res = client.post("/plans/generate", json={"date": DAY, "time_limit_s": 2})
     return client.get(f"/plans/{res.get_json()['id']}").get_json()
@@ -38,7 +37,6 @@ def test_breakdown_removes_vehicle_and_replans_its_orders(app, client):
     assert new["status"] == "ready"
     assert broken not in {r["vehicle"]["id"] for r in new["routes"]}
     assert db_status(broken) == "maintenance"
-    # nothing the broken vehicle carried is silently lost: it is re-planned or reported
     covered = served_orders(new) | {u["order_id"] for u in new["unassigned"]}
     assert moved <= covered
     assert client.get("/events").get_json()["items"][0]["handled_by_plan_id"] == new["id"]
@@ -55,7 +53,6 @@ def test_cancellation_removes_order(app, client):
     _, new = report(client, {"type": "cancellation", "order_id": victim})
     assert victim not in served_orders(new)
     assert victim not in {u["order_id"] for u in new["unassigned"]}
-    # cancelling twice is rejected
     assert client.post("/events", json={"type": "cancellation", "order_id": victim}).status_code == 409
 
 
@@ -77,7 +74,7 @@ def test_delay_pushes_departure_later(app, client):
         if r["vehicle"]["id"] == route["vehicle"]["id"]:
             nh, nm = map(int, r["planned_departure"].split(":"))
             assert nh * 60 + nm >= h * 60 + m + 90 - 1
-    for r in new["routes"]:   # still a valid plan: arrivals never earlier than departure
+    for r in new["routes"]:
         assert all(s["planned_arrival"] >= r["planned_departure"] for s in r["stops"])
 
 
@@ -107,7 +104,6 @@ def test_compare_reports_what_changed(app, client):
 
 
 def test_replan_is_stable_for_small_disruptions(app, client):
-    """A single cancellation or rush order must not reshuffle the whole fleet."""
     old = make_plan(client)
     total = len(served_orders(old))
 

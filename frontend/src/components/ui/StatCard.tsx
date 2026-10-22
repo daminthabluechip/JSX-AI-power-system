@@ -3,9 +3,9 @@ import type { LucideIcon } from "lucide-react";
 type Props = {
   label: string;
   value: string | number;
-  note?: string; // small green text under the value, e.g. "+4.4% above target"
+  note?: string;
   icon: LucideIcon;
-  tone?: "blue" | "orange" | "green" | "purple"; // icon background colour
+  tone?: "blue" | "orange" | "green" | "purple";
 };
 
 const TONES = {
@@ -15,7 +15,6 @@ const TONES = {
   purple: "bg-violet-50 text-violet-600",
 };
 
-// KPI tile used on the Dashboard and Reports pages.
 export default function StatCard({ label, value, note, icon: Icon, tone = "blue" }: Props) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">

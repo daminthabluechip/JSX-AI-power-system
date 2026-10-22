@@ -8,23 +8,19 @@ import VehicleForm from "@/components/forms/VehicleForm";
 import { api, STATUS_LABEL, VEHICLE_TYPE_LABEL, type Vehicle, type VehicleStatus } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-// Badge colours per vehicle status.
 const STATUS_STYLE: Record<VehicleStatus, string> = {
   on_route: "bg-blue-50 text-blue-600",
   available: "bg-emerald-50 text-emerald-600",
   maintenance: "bg-orange-50 text-orange-600",
 };
 
-// Vehicles page: fleet summary + searchable table, loaded from GET /vehicles and /vehicles/summary.
-// Add / edit use VehicleForm (POST /vehicles, PATCH /vehicles/{id}); delete uses DELETE /vehicles/{id}.
 export default function VehiclesPage() {
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<Vehicle | "new" | null>(null); // which form is open
+  const [editing, setEditing] = useState<Vehicle | "new" | null>(null);
   const [deleting, setDeleting] = useState<Vehicle | null>(null);
   const vehicles = useApi(() => api.vehicles.list());
   const summary = useApi(() => api.vehicles.summary());
 
-  // Filter by registration, model or driver (case-insensitive).
   const rows = (vehicles.data?.items ?? []).filter((v) =>
     `${v.registration} ${v.model} ${v.driver} ${v.vehicle_type}`.toLowerCase().includes(query.toLowerCase())
   );
@@ -50,7 +46,6 @@ export default function VehiclesPage() {
 
       {vehicles.error && <ErrorBox message={vehicles.error} />}
 
-      {/* Fleet summary strip */}
       <div className="grid grid-cols-4 divide-x divide-slate-200 rounded-xl border border-slate-200 bg-white py-4">
         {strip.map(([label, n]) => (
           <div key={label} className="flex items-center justify-center gap-3 text-sm">

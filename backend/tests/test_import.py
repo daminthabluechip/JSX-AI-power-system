@@ -23,10 +23,10 @@ def test_one_bad_row_rejects_the_whole_file_with_row_numbers(client):
     res = post_csv(client, "\n".join([HEADER, GOOD, bad]))
     body = res.get_json()
     assert res.status_code == 400 and body["created"] == 0 and body["skipped"] == 1
-    assert body["errors"][0]["row"] == 3                       # header is row 1, the bad row is row 3
+    assert body["errors"][0]["row"] == 3
     fields = body["errors"][0]["errors"]
     assert {"latitude", "weight_kg", "priority"} <= set(fields)
-    assert client.get("/orders").get_json()["total"] == 0      # nothing was saved, not even the good row
+    assert client.get("/orders").get_json()["total"] == 0
 
 
 def test_skip_invalid_saves_the_good_rows(client):
@@ -43,7 +43,7 @@ def test_optional_columns_blank_lines_case_and_excel_bom(client):
     res = client.post("/orders/import", data=text.encode("utf-8"), content_type="text/csv")
     assert res.status_code == 201 and res.get_json()["created"] == 1
     order = client.get("/orders").get_json()["items"][0]
-    assert order["priority"] == "medium" and order["earliest_arrival"] is None   # defaults / blanks
+    assert order["priority"] == "medium" and order["earliest_arrival"] is None
 
 
 def test_missing_columns_and_empty_file_and_non_utf8(client):
@@ -60,5 +60,4 @@ def test_multipart_file_upload_and_template(client):
 
     tpl = client.get("/orders/import/template")
     assert tpl.mimetype == "text/csv" and tpl.get_data(as_text=True).startswith("customer,address,latitude")
-    # the downloadable template must itself import cleanly
     assert post_csv(client, tpl.get_data(as_text=True)).get_json()["created"] == 2

@@ -5,7 +5,6 @@ import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { api, type ImportResult } from "@/lib/api";
 
-// Bulk-load deliveries from a CSV file (POST /orders/import). Shows exactly which rows failed.
 export default function ImportOrders({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [skipInvalid, setSkipInvalid] = useState(false);

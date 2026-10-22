@@ -1,4 +1,3 @@
-"""Builds an in-memory problem like the seed data (no database), for optimizer tests."""
 import random
 
 from app.optimizer.types import OrderSpec, VehicleSpec

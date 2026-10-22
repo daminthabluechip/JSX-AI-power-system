@@ -1,4 +1,3 @@
-"""/vehicles endpoints: create, read, update and delete fleet vehicles."""
 from flask import Blueprint, jsonify, request
 from sqlalchemy import func
 
@@ -10,7 +9,6 @@ bp = Blueprint("vehicles", __name__, url_prefix="/vehicles")
 
 STATUSES = ["available", "on_route", "maintenance"]
 
-# Field rules used to validate create/update bodies.
 SPEC = {
     "registration": {"kind": "str", "required": True},
     "model": {"kind": "str"},
@@ -26,7 +24,6 @@ SPEC = {
 
 
 def to_dict(v):
-    """Vehicle -> JSON-friendly dict (times as 'HH:MM')."""
     return {
         "id": v.id,
         "registration": v.registration,
@@ -44,7 +41,6 @@ def to_dict(v):
 
 @bp.get("")
 def list_vehicles():
-    """GET /vehicles?q=&status=&page=&per_page= - filtered, paginated list."""
     query = Vehicle.query.order_by(Vehicle.id)
     if status := request.args.get("status"):
         query = query.filter(Vehicle.status == status)
@@ -57,7 +53,6 @@ def list_vehicles():
 
 @bp.get("/summary")
 def summary():
-    """GET /vehicles/summary - counts for the Vehicles page header strip."""
     rows = dict(db.session.query(Vehicle.status, func.count()).group_by(Vehicle.status).all())
     return jsonify(
         all=sum(rows.values()),
@@ -87,7 +82,6 @@ def create_vehicle():
 @bp.put("/<int:vehicle_id>")
 @bp.patch("/<int:vehicle_id>")
 def update_vehicle(vehicle_id):
-    """Update only the fields that are sent."""
     vehicle = db.get_or_404(Vehicle, vehicle_id)
     for key, value in clean_payload(request.get_json(silent=True), SPEC, partial=True).items():
         setattr(vehicle, key, value)
@@ -98,11 +92,10 @@ def update_vehicle(vehicle_id):
 @bp.delete("/<int:vehicle_id>")
 def delete_vehicle(vehicle_id):
     vehicle = db.get_or_404(Vehicle, vehicle_id)
-    # A vehicle that appears in a plan or an event is part of the history: keep it.
     if Route.query.filter_by(vehicle_id=vehicle_id).first() or Event.query.filter_by(vehicle_id=vehicle_id).first():
         return jsonify(error="conflict", details={
             "message": "This vehicle is part of existing plans. Set its status to maintenance instead of deleting it."}), 409
-    Position.query.filter_by(vehicle_id=vehicle_id).delete()   # its GPS history can go with it
+    Position.query.filter_by(vehicle_id=vehicle_id).delete()
     db.session.delete(vehicle)
     db.session.commit()
     return "", 204

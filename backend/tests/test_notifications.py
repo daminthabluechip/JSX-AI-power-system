@@ -1,4 +1,3 @@
-"""When orders are left unassigned, tell the dispatcher when another vehicle becomes available."""
 from datetime import date
 
 from app.extensions import db
@@ -13,7 +12,6 @@ def vehicles_by_reg(client):
 
 
 def plan_with_few_vehicles(client, regs=("VH-5120",), **extra):
-    """Seed, then plan ALL orders with only a few small vehicles, so many orders stay unassigned."""
     seed(date(2026, 10, 14))
     ids = [vehicles_by_reg(client)[r]["id"] for r in regs]
     res = client.post("/plans/generate", json={"date": DAY, "vehicle_ids": ids, "time_limit_s": 2, **extra})
@@ -31,8 +29,8 @@ def test_notifies_about_vehicles_the_plan_did_not_consider(client):
     assert items
 
     regs = {n["vehicle"]["registration"] for n in items}
-    assert "VH-5120" not in regs                      # the plan already had it
-    assert "VH-2275" not in regs and "VH-2048" not in regs   # in maintenance / out on a route: not available
+    assert "VH-5120" not in regs
+    assert "VH-2275" not in regs and "VH-2048" not in regs
     for n in items:
         assert n["plan_id"] == plan["id"] and n["orders"]
         assert n["suggested_event"] == {"type": "vehicle_available", "vehicle_id": n["vehicle"]["id"]}
@@ -53,7 +51,7 @@ def test_only_orders_the_vehicle_can_carry_are_listed(client):
 
 def test_vehicle_type_rule_decides_who_is_told(client):
     seed(date(2026, 10, 14))
-    ids = [vehicles_by_reg(client)["VH-5120"]["id"]]   # a van
+    ids = [vehicles_by_reg(client)["VH-5120"]["id"]]
     only = client.post("/orders", json={"customer": "Cold Chain Ltd", "address": "x", "latitude": 6.93, "longitude": 79.86,
                                         "weight_kg": 300, "volume_m3": 2, "target_date": DAY,
                                         "required_vehicle_type": "refrigerated"}).get_json()
@@ -62,7 +60,7 @@ def test_vehicle_type_rule_decides_who_is_told(client):
     assert [u["order_id"] for u in plan["unassigned"]] == [only["id"]]
 
     types = {n["vehicle"]["vehicle_type"] for n in notes(client)}
-    assert types == {"refrigerated"}                   # trucks and vans could not take it: they are not mentioned
+    assert types == {"refrigerated"}
 
 
 def test_a_vehicle_leaving_maintenance_triggers_a_notice(client):
@@ -93,22 +91,22 @@ def test_no_notice_when_everything_was_planned(client):
 def test_old_plans_without_a_vehicle_list_stay_quiet(client):
     plan, _ = plan_with_few_vehicles(client)
     assert notes(client)
-    db.session.get(Plan, plan["id"]).vehicle_ids = None     # a plan made before this was recorded
+    db.session.get(Plan, plan["id"]).vehicle_ids = None
     db.session.commit()
     assert notes(client) == []
 
 
 def test_replanning_with_the_vehicle_uses_it_and_clears_the_notice(client):
     plan, _ = plan_with_few_vehicles(client)
-    note = next(n for n in notes(client) if n["vehicle"]["registration"] == "VH-1189")   # a big truck
+    note = next(n for n in notes(client) if n["vehicle"]["registration"] == "VH-1189")
 
     res = client.post("/events", json=note["suggested_event"])
     assert res.status_code == 202
     new = client.get(f"/plans/{res.get_json()['plan']['id']}").get_json()
 
     assert new["status"] == "ready" and new["version"] == plan["version"] + 1
-    assert note["vehicle"]["id"] in {r["vehicle"]["id"] for r in new["routes"]}      # it is really used
-    assert len(new["unassigned"]) < len(plan["unassigned"])                           # and it helped
+    assert note["vehicle"]["id"] in {r["vehicle"]["id"] for r in new["routes"]}
+    assert len(new["unassigned"]) < len(plan["unassigned"])
     assert note["vehicle"]["registration"] not in {n["vehicle"]["registration"] for n in notes(client)}
 
 

@@ -8,7 +8,6 @@ import {
   type Order, type OrderStatus, type Priority,
 } from "@/lib/api";
 
-// Add a delivery order (order = undefined) or edit one. Weight is typed in kg.
 export default function OrderForm({
   order,
   onClose,
@@ -21,13 +20,12 @@ export default function OrderForm({
   const [values, setValues] = useState({
     customer: order?.customer ?? "",
     address: order?.address ?? "",
-    // Colombo as a starting point; see the geocoding TODO below.
     latitude: order ? String(order.latitude) : "6.9271",
     longitude: order ? String(order.longitude) : "79.8612",
     weight_kg: order ? String(order.weight_kg) : "",
     volume_m3: order ? String(order.volume_m3) : "",
     priority: order?.priority ?? "medium",
-    required_vehicle_type: order?.required_vehicle_type ?? "", // "" = any vehicle
+    required_vehicle_type: order?.required_vehicle_type ?? "",
     target_date: order?.target_date ?? todayISO(),
     earliest_arrival: order?.earliest_arrival ?? "08:00",
     latest_arrival: order?.latest_arrival ?? "17:00",
@@ -60,7 +58,6 @@ export default function OrderForm({
       ...(order ? { status: values.status } : {}),
     };
     try {
-      // POST /orders to create, PATCH /orders/{id} to edit
       if (order) await api.orders.update(order.id, body);
       else await api.orders.create(body);
       onSaved();
@@ -83,9 +80,6 @@ export default function OrderForm({
           <Field label="Delivery date" name="target_date" type="date" value={values.target_date} onChange={set("target_date")} error={errors.target_date} />
         </div>
         <Field label="Delivery address" name="address" value={values.address} onChange={set("address")} error={errors.address} />
-        {/* TODO: TOOL/API CALL HERE - geocode the address to latitude/longitude automatically
-            (e.g. OpenRouteService geocoding or Nominatim, both rate limited). Until then the
-            coordinates are typed in by hand. */}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Latitude" name="latitude" type="number" step="any" value={values.latitude} onChange={set("latitude")} error={errors.latitude} />
           <Field label="Longitude" name="longitude" type="number" step="any" value={values.longitude} onChange={set("longitude")} error={errors.longitude} hint="Sri Lanka is about 6-10 N, 79-82 E" />

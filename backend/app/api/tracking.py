@@ -1,4 +1,3 @@
-"""/tracking endpoints: live positions, delay alerts, and the simulator controls."""
 from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request
@@ -14,23 +13,16 @@ bp = Blueprint("tracking", __name__, url_prefix="/tracking")
 
 @bp.get("/positions")
 def positions():
-    """GET /tracking/positions - every vehicle's latest position, schedule lag and next stop."""
     return jsonify({**tracking.snapshot(current_app.config), "simulator": simulator.status()})
 
 
 @bp.get("/alerts")
 def alerts():
-    """GET /tracking/alerts - vehicles running late; each has a suggested_event to POST to /events."""
     return jsonify(items=tracking.delay_alerts(current_app.config))
 
 
 @bp.post("/positions")
 def ingest_positions():
-    """POST /tracking/positions - the entry point for a real tracking feed.
-
-    Body: one reading or a list: {vehicle_id, latitude, longitude, speed_kmh?, recorded_at?}
-    recorded_at is an ISO timestamp (defaults to now).
-    """
     body = request.get_json(silent=True)
     readings = body if isinstance(body, list) else [body]
     errors = {}
@@ -55,13 +47,6 @@ def simulator_status():
 
 @bp.post("/simulator")
 def simulator_control():
-    """POST /tracking/simulator {action, ...}
-
-    start  {time?: "08:00", speed?: 1}   begin (or restart the clock of) the simulation
-    stop                                  pause the clock
-    delay  {vehicle_id, minutes}          hold a vehicle up (a traffic jam)
-    reset                                 stop, forget delays, delete stored positions
-    """
     body = request.get_json(silent=True) or {}
     action = body.get("action")
     if action == "start":
@@ -72,9 +57,9 @@ def simulator_control():
             start = parse_time(body["time"]) if body.get("time") else None
         except ValueError:
             raise ValidationError({"time": "expected HH:MM"})
-        if start is None and simulator.has_run:   # resume where the clock was paused
+        if start is None and simulator.has_run:
             start_minute = None
-        elif start is None:   # first start: shortly before the earliest departure
+        elif start is None:
             first = min(r.planned_departure for r in plan.routes)
             start_minute = first.hour * 60 + first.minute - 5
         else:

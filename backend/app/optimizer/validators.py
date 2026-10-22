@@ -1,13 +1,4 @@
-"""Independent check that a plan really obeys the hard rules.
-
-This is the "automatic check on every plan" from the proposal's success targets:
-capacity violations must be 0 and time window violations must be 0.
-It re-derives everything from the plan itself, so it also catches solver bugs.
-"""
-
-
 def check_plan(result, vehicles, orders):
-    """Return a list of human-readable violations (empty list = plan is valid)."""
     vehicle_by_id = {v.id: v for v in vehicles}
     order_by_id = {o.id: o for o in orders}
     problems, seen = [], set()

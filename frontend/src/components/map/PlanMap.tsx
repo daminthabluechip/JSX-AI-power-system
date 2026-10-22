@@ -5,7 +5,6 @@ import RoutesMapLoader from "./RoutesMapLoader";
 import { routeColor } from "./routeColors";
 import type { Plan } from "@/lib/api";
 
-// A plan's routes on a map with a legend. Click a vehicle in the legend to hide or show its route.
 export default function PlanMap({ plan, heightClass = "h-[420px]" }: { plan: Plan; heightClass?: string }) {
   const [hidden, setHidden] = useState<number[]>([]);
   const toggle = (id: number) => setHidden((h) => (h.includes(id) ? h.filter((x) => x !== id) : [...h, id]));

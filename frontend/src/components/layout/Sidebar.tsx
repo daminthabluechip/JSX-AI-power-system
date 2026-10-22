@@ -18,7 +18,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { api } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
-// Navigation items, in the same order as the design mockups.
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/vehicles", label: "Vehicles", icon: Truck },
@@ -31,11 +30,9 @@ const NAV = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  // On a shared demo the backend says so, and we offer a way to start over with fresh sample data.
   const demo = useApi(() => api.demo.status().catch(() => ({ enabled: false })));
   const [resetting, setResetting] = useState(false);
 
-  // "/" must match exactly; other items match any nested path.
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
@@ -60,7 +57,6 @@ export default function Sidebar() {
           >
             <Icon size={16} />
             <span className="flex-1">{label}</span>
-            {/* Green dot = live data indicator (Live Tracking only) */}
             {live && <span className="h-2 w-2 rounded-full bg-emerald-500" />}
           </Link>
         ))}
@@ -87,7 +83,6 @@ export default function Sidebar() {
           </button>
         )}
 
-        {/* TODO: TOOL/API CALL HERE - replace with the logged-in user once auth exists. */}
         <div className="flex items-center gap-2 px-1">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold">
             AH
@@ -106,7 +101,7 @@ export default function Sidebar() {
           onClose={() => setResetting(false)}
           onConfirm={async () => {
             await api.demo.reset();
-            window.location.reload(); // every screen shows the fresh data
+            window.location.reload();
           }}
         />
       )}

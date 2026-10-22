@@ -3,7 +3,6 @@
 import { X } from "lucide-react";
 import { useEffect } from "react";
 
-// A centered dialog with a dark backdrop. Closes on Escape or a click on the backdrop.
 export default function Modal({
   title,
   onClose,

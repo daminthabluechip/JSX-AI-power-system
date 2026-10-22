@@ -1,12 +1,3 @@
-# Whole app:   docker compose up --build
-#   dashboard  http://localhost:3000        API  http://127.0.0.1:5000
-# Sample data: docker compose run --rm backend flask --app wsgi seed --reset
-# Only the database (for local development without containers): docker compose up -d db
-#
-# Optional settings for a shared demo (put them in a .env file next to this one, or in your shell):
-#   API_KEY              a secret: the backend then refuses requests that do not carry it
-#   BASIC_AUTH_PASSWORD  puts a password (user "mentor") in front of the website
-#   DEMO_MODE=true       loads sample data for today on start-up and shows a "Reset demo data" button
 services:
   db:
     image: postgres:16
@@ -15,7 +6,7 @@ services:
       POSTGRES_PASSWORD: transport
       POSTGRES_DB: transport
     ports:
-      - "5433:5432"     # 5433 on your machine, so it does not clash with a local PostgreSQL on 5432
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -43,12 +34,12 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_URL: /api   # the browser calls this website's own /api, which forwards to the backend
+        NEXT_PUBLIC_API_URL: /api
     environment:
       BACKEND_URL: http://backend:5000
-      API_KEY: ${API_KEY:-}                          # must equal the backend's API_KEY
+      API_KEY: ${API_KEY:-}
       BASIC_AUTH_USER: mentor
-      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}  # set it to put a password in front of the website
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
     ports:
       - "3000:3000"
     depends_on:

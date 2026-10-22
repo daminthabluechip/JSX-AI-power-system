@@ -6,5 +6,5 @@ from app.extensions import db
 def test_health_and_tables_create():
     app = create_app(TestConfig)
     with app.app_context():
-        db.create_all()  # proves every model definition is valid
+        db.create_all()
     assert app.test_client().get("/health").get_json() == {"status": "ok"}

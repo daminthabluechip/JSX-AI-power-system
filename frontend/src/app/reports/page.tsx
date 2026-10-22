@@ -12,8 +12,6 @@ const RANGES = [{ days: 7, label: "Last 7 days" }, { days: 30, label: "Last 30 d
 const pct = (v: number | null) => (v == null ? "-" : `${v}%`);
 const shortDate = (iso: string) => new Date(iso + "T00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" });
 
-// Reports & Analytics: every figure comes from GET /reports (plans + tracked deliveries).
-// A figure with no data behind it shows "-" rather than a made-up number.
 export default function ReportsPage() {
   const [days, setDays] = useState(30);
   const [exporting, setExporting] = useState(false);
@@ -30,7 +28,7 @@ export default function ReportsPage() {
     setExporting(true);
     setExportError(null);
     try {
-      const blob = await api.reports.exportCsv(days); // GET /reports/export
+      const blob = await api.reports.exportCsv(days);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -64,7 +62,6 @@ export default function ReportsPage() {
       {report.error && <ErrorBox message={report.error} />}
       {exportError && <ErrorBox message={exportError} />}
 
-      {/* KPI row */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard label="On-time delivery" value={pct(k?.on_time_pct ?? null)} icon={Timer}
           note={k?.measured_deliveries ? `${k.measured_deliveries - k.late_deliveries} of ${k.measured_deliveries} tracked deliveries` : "no tracked deliveries yet"} />
@@ -129,7 +126,6 @@ export default function ReportsPage() {
         </div>
       )}
 
-      {/* Rule-based insights computed by the backend from the same data */}
       {(data?.insights.length ?? 0) > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2">

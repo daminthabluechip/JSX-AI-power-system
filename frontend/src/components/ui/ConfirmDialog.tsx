@@ -3,8 +3,6 @@
 import { useState } from "react";
 import Modal from "./Modal";
 
-// "Are you sure?" dialog. onConfirm may throw: the message is shown inside the dialog
-// (e.g. the backend refuses to delete a vehicle that plans refer to).
 export default function ConfirmDialog({
   title,
   message,

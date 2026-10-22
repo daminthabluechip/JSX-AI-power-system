@@ -5,7 +5,6 @@ import Modal from "@/components/ui/Modal";
 import Field from "./Field";
 import { api, ApiError, STATUS_LABEL, VEHICLE_TYPES, VEHICLE_TYPE_LABEL, type Vehicle } from "@/lib/api";
 
-// Add a vehicle (vehicle = undefined) or edit one. Weights are typed in tonnes and sent as kg.
 export default function VehicleForm({
   vehicle,
   onClose,
@@ -49,14 +48,12 @@ export default function VehicleForm({
       status: values.status,
     };
     try {
-      // POST /vehicles to create, PATCH /vehicles/{id} to edit
       if (vehicle) await api.vehicles.update(vehicle.id, body);
       else await api.vehicles.create(body);
       onSaved();
       onClose();
     } catch (err) {
       if (err instanceof ApiError && err.details && typeof err.details === "object") {
-        // The backend names the field that failed; show each message under its input.
         const map: Record<string, string> = {};
         const rename: Record<string, string> = { weight_capacity_kg: "capacityT", volume_capacity_m3: "volume" };
         Object.entries(err.details as Record<string, string>).forEach(([k, m]) => (map[rename[k] ?? k] = m));

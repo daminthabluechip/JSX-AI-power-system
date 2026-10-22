@@ -1,9 +1,8 @@
 @import "tailwindcss";
 
-/* Design tokens taken from the UI mockups (blue/slate palette, light theme only). */
 :root {
-  --background: #f8fafc; /* slate-50 page background */
-  --foreground: #0f172a; /* slate-900 text */
+  --background: #f8fafc;
+  --foreground: #0f172a;
 }
 
 @theme inline {

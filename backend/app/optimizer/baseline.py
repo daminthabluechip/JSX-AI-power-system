@@ -1,9 +1,3 @@
-"""A deliberately simple "manual-style" plan to compare the optimizer against.
-
-Nearest-neighbour: fill one vehicle at a time, always driving to the closest order that still
-fits (capacity + time window), and start the next vehicle when nothing fits any more.
-The proposal's target is: the optimizer saves at least 10% distance versus this plan.
-"""
 from .types import PlanResult, PlannedRoute, PlannedStop
 
 
@@ -11,7 +5,6 @@ def nearest_neighbour(vehicles, orders, dist_m, dur_min):
     result = PlanResult()
     remaining = {node: o for node, o in enumerate(orders, start=1)}
 
-    # Biggest vehicles first, as a dispatcher would load them.
     for spec in sorted(vehicles, key=lambda v: -v.weight_capacity_kg):
         if not remaining:
             break
@@ -23,12 +16,12 @@ def nearest_neighbour(vehicles, orders, dist_m, dur_min):
             best = None
             for node, o in remaining.items():
                 if o.required_vehicle_type and o.required_vehicle_type != spec.vehicle_type:
-                    continue   # wrong kind of vehicle for this order
+                    continue
                 if load + o.weight_kg > spec.weight_capacity_kg:
                     continue
                 if volume + o.volume_m3 > spec.volume_capacity_m3:
                     continue
-                arrival = max(clock + dur_min[here][node], o.tw_start)  # wait if too early
+                arrival = max(clock + dur_min[here][node], o.tw_start)
                 back_home = arrival + o.service_min + dur_min[node][0]
                 if arrival > o.tw_end or back_home > spec.shift_end:
                     continue

@@ -1,4 +1,3 @@
-"""An order that requires a vehicle type may only be served by a vehicle of that type."""
 from datetime import date
 
 from app.optimizer.baseline import nearest_neighbour
@@ -22,7 +21,6 @@ def served_by(result):
 
 
 def test_required_type_beats_the_cheaper_vehicle():
-    # Vehicle 1 is nearer/cheaper, but the order needs refrigeration, so vehicle 2 must take it.
     vehicles = [VehicleSpec(1, 10000, 50, vehicle_type="truck"), VehicleSpec(2, 10000, 50, vehicle_type="refrigerated")]
     orders = [OrderSpec(1, 500, 2, required_vehicle_type="refrigerated"), OrderSpec(2, 500, 2)]
     v, o, d, t = problem(vehicles, orders, [(0.05, 0.0), (0.05, 0.01)])
@@ -41,7 +39,6 @@ def test_no_vehicle_of_the_required_type_gives_a_clear_reason():
 
 
 def test_capacity_is_checked_against_eligible_vehicles_only():
-    # The big truck could carry 9 t, but only the small refrigerated van is allowed.
     vehicles = [VehicleSpec(1, 20000, 80, vehicle_type="truck"), VehicleSpec(2, 5000, 20, vehicle_type="refrigerated")]
     orders = [OrderSpec(1, 9000, 5, required_vehicle_type="refrigerated")]
     v, o, d, t = problem(vehicles, orders, [(0.05, 0.0)])
@@ -56,13 +53,10 @@ def test_baseline_and_validator_respect_the_rule():
     base = nearest_neighbour(v, o, d, t)
     assert served_by(base)[1] == 2 and check_plan(base, v, o) == []
 
-    # Deliberately break the plan: move the route that carries the flatbed order onto the truck.
     flatbed_route = next(r for r in base.routes if any(s.order_id == 1 for s in r.stops))
     flatbed_route.vehicle_id = 1
     assert any("needs a 'flatbed' vehicle" in p for p in check_plan(base, v, o))
 
-
-# ---------- API ----------
 
 def test_api_accepts_only_known_types(client):
     vehicle = {"registration": "VH-T1", "weight_capacity_kg": 5000, "volume_capacity_m3": 20}
@@ -84,7 +78,7 @@ def test_csv_import_reads_the_vehicle_type_column(client):
                      content_type="text/csv")
     assert ok.status_code == 201
     types = {o["customer"]: o["required_vehicle_type"] for o in client.get("/orders").get_json()["items"]}
-    assert types == {"A": "refrigerated", "B": None}                     # case-insensitive, blank = any
+    assert types == {"A": "refrigerated", "B": None}
     bad = client.post("/orders/import", data=f"{header}\nC,3 Rd,6.9,79.8,10,1,2026-10-14,spaceship\n".encode(), content_type="text/csv")
     assert bad.status_code == 400 and "required_vehicle_type" in bad.get_json()["errors"][0]["errors"]
 
@@ -104,4 +98,4 @@ def test_full_plan_on_seed_data_respects_every_type(app, client):
             if need:
                 constrained += 1
                 assert vehicles[route["vehicle"]["id"]]["vehicle_type"] == need
-    assert constrained > 0   # the sample data really contains constrained orders, and they were served
+    assert constrained > 0

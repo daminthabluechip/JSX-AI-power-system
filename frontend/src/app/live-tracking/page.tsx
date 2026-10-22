@@ -19,8 +19,6 @@ type Replan =
   | { phase: "ready"; planId: number; version: number; comparison: PlanComparison }
   | { phase: "dispatching" };
 
-// Live Tracking: positions refresh every 2 s from GET /tracking/positions. The simulator
-// (backend) stands in for JXG's feed until real tracking access exists.
 export default function LiveTrackingPage() {
   const [tab, setTab] = useState<"active" | "all">("active");
   const [query, setQuery] = useState("");
@@ -41,22 +39,20 @@ export default function LiveTrackingPage() {
   );
   const selected = items.find((v) => v.vehicle_id === selectedId) ?? active[0] ?? items[0] ?? null;
 
-  // Run a simulator command and show any error from the backend.
   async function control(body: Record<string, unknown>) {
     setActionError(null);
     try {
-      await api.tracking.simulator(body); // POST /tracking/simulator
+      await api.tracking.simulator(body);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Command failed");
     }
   }
 
-  // The "re-plan now" button on an alert: report the suggested delay event and wait for the new plan.
   async function replanFor(alert: DelayAlert) {
     setActionError(null);
     setReplan({ phase: "planning", vehicle: alert.registration });
     try {
-      const out = await api.events.report(alert.suggested_event); // POST /events
+      const out = await api.events.report(alert.suggested_event);
       const plan = await waitForPlan(out.plan.id);
       if (plan.status === "failed") throw new Error(plan.error ?? "Re-planning failed");
       const comparison = await api.plans.compare(out.replaces_plan_id, plan.id);
@@ -71,7 +67,7 @@ export default function LiveTrackingPage() {
     if (replan.phase !== "ready") return;
     setReplan({ phase: "dispatching" });
     try {
-      await api.plans.dispatch(replan.planId); // POST /plans/{id}/dispatch - vehicles switch to the new plan
+      await api.plans.dispatch(replan.planId);
       setReplan({ phase: "idle" });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Dispatch failed");
@@ -105,7 +101,6 @@ export default function LiveTrackingPage() {
         </div>
       )}
 
-      {/* Simulator controls (replaced by the real feed once JXG access exists) */}
       {hasPlan && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm">
           <span className="flex items-center gap-1.5 font-semibold"><Timer size={16} className="text-blue-600" /> Simulator</span>
@@ -133,7 +128,6 @@ export default function LiveTrackingPage() {
         </div>
       )}
 
-      {/* Delay alerts: each can trigger a re-plan */}
       {(alerts.data?.items ?? []).map((a) => (
         <div key={a.vehicle_id} className="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-900">
           <AlertTriangle size={18} className="shrink-0" />
@@ -172,7 +166,6 @@ export default function LiveTrackingPage() {
       )}
 
       <div className="flex h-[520px] gap-4">
-        {/* Vehicle list */}
         <aside className="flex w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-white">
           <div className="p-3">
             <div className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-400">
@@ -212,7 +205,6 @@ export default function LiveTrackingPage() {
           </ul>
         </aside>
 
-        {/* Map + selected-vehicle card */}
         <div className="relative flex-1 overflow-hidden rounded-xl border border-slate-200">
           <FleetMapLoader vehicles={mapVehicles} selectedId={selected?.registration} onSelect={(reg) => setSelectedId(items.find((v) => v.registration === reg)?.vehicle_id ?? null)} />
           {selected && (

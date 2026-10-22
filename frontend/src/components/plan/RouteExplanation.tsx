@@ -1,27 +1,20 @@
 import { formatDuration, PRIORITY_LABEL, VEHICLE_TYPE_LABEL, type PlanRoute } from "@/lib/api";
 
-// "08:30" -> 510 (minutes since midnight)
 const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 const tonnes = (kg: number) => `${(kg / 1000).toFixed(1)} t`;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-// Explains, in plain words, how one vehicle's route was planned: what it does step by step,
-// and why the system gave it these customers in this order. Everything here is calculated from
-// the plan data; nothing is invented. Shown inside each vehicle card on the Route Planning page.
 export default function RouteExplanation({ route, defaultOpen = false }: { route: PlanRoute; defaultOpen?: boolean }) {
   const { vehicle, stops } = route;
   const typeName = VEHICLE_TYPE_LABEL[vehicle.vehicle_type].toLowerCase();
 
-  // Whole-trip figures
   const tripMinutes = route.return_time ? toMin(route.return_time) - toMin(route.planned_departure) : null;
 
-  // How much spare time each stop has before the customer's window closes (the "slack").
   const slacks = stops
     .filter((s) => s.window_end)
     .map((s) => ({ stop: s, spare: toMin(s.window_end!) - toMin(s.planned_arrival) }));
   const tightest = slacks.length ? slacks.reduce((a, b) => (b.spare < a.spare ? b : a)) : null;
 
-  // Customers who need a particular kind of vehicle, and the priority mix on this route.
   const needType = stops.filter((s) => s.required_vehicle_type);
   const urgent = stops.filter((s) => s.priority === "critical" || s.priority === "high");
 
@@ -32,7 +25,6 @@ export default function RouteExplanation({ route, defaultOpen = false }: { route
       </summary>
 
       <div className="space-y-4 border-t border-blue-100 p-3 text-slate-700">
-        {/* 1. The route in one paragraph */}
         <p className="leading-relaxed">
           <span className="font-semibold">{vehicle.registration}</span> ({vehicle.model ?? "vehicle"}, {typeName}) leaves
           the depot at <b>{route.planned_departure}</b> and delivers to <b>{plural(stops.length, "customer")}</b> in the
@@ -51,7 +43,6 @@ export default function RouteExplanation({ route, defaultOpen = false }: { route
           )}
         </p>
 
-        {/* 2. Step by step */}
         <div>
           <p className="mb-2 font-semibold text-slate-900">Step by step</p>
           <ol className="space-y-2 border-l-2 border-blue-200 pl-3">
@@ -87,7 +78,6 @@ export default function RouteExplanation({ route, defaultOpen = false }: { route
           </ol>
         </div>
 
-        {/* 3. Why it looks like this */}
         <div>
           <p className="mb-1 font-semibold text-slate-900">Why it was planned this way</p>
           <ul className="list-disc space-y-1.5 pl-4 leading-relaxed">

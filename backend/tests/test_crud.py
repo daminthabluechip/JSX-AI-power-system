@@ -11,7 +11,7 @@ def test_vehicle_crud_cycle(client):
     created = client.post("/vehicles", json=VEHICLE)
     assert created.status_code == 201
     vid = created.get_json()["id"]
-    assert created.get_json()["status"] == "available"  # model default
+    assert created.get_json()["status"] == "available"
 
     assert client.get(f"/vehicles/{vid}").get_json()["shift_start"] == "07:00"
     patched = client.patch(f"/vehicles/{vid}", json={"status": "maintenance"})
@@ -28,7 +28,7 @@ def test_vehicle_validation(client):
     assert "weight_capacity_kg" in details and "volume_capacity_m3" in details
 
     client.post("/vehicles", json=VEHICLE)
-    assert client.post("/vehicles", json=VEHICLE).status_code == 409  # duplicate registration
+    assert client.post("/vehicles", json=VEHICLE).status_code == 409
 
     assert client.post("/vehicles", json={**VEHICLE, "registration": "V2", "status": "flying"}
                        ).status_code == 400
@@ -50,7 +50,6 @@ def test_order_rejects_bad_time_window_and_date(client):
     assert client.post("/orders", json={**ORDER, "earliest_arrival": "15:00",
                                         "latest_arrival": "09:00"}).status_code == 400
     assert client.post("/orders", json={**ORDER, "target_date": "not-a-date"}).status_code == 400
-    # updating one side of the window is checked against the stored other side
     oid = client.post("/orders", json=ORDER).get_json()["id"]
     assert client.patch(f"/orders/{oid}", json={"latest_arrival": "08:00"}).status_code == 400
 
@@ -73,15 +72,13 @@ def test_cannot_delete_vehicle_or_order_that_plans_refer_to(app, client):
     assert res.status_code == 409 and "maintenance" in res.get_json()["details"]["message"]
     res = client.delete(f"/orders/{used_order}")
     assert res.status_code == 409 and "Cancel" in res.get_json()["details"]["message"]
-    assert client.get(f"/vehicles/{used_vehicle}").status_code == 200   # still there
+    assert client.get(f"/vehicles/{used_vehicle}").status_code == 200
 
-    # unused ones can still be deleted
     unused = client.post("/vehicles", json=VEHICLE).get_json()["id"]
     assert client.delete(f"/vehicles/{unused}").status_code == 204
 
 
 def test_edit_can_clear_optional_fields_but_not_required_ones(client):
-    """The edit forms send null for a cleared field."""
     vid = client.post("/vehicles", json={**VEHICLE, "driver": "Nimal", "model": "Volvo"}).get_json()["id"]
     cleared = client.patch(f"/vehicles/{vid}", json={"driver": None, "model": "", "status": "maintenance"}).get_json()
     assert cleared["driver"] is None and cleared["status"] == "maintenance"

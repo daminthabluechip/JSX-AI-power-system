@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 
-// Leaflet touches `window`, so the map cannot render on the server. Pages import this wrapper.
 const RoutesMapLoader = dynamic(() => import("./RoutesMap"), {
   ssr: false,
   loading: () => (

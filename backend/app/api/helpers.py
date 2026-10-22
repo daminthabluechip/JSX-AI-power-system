@@ -1,4 +1,3 @@
-"""Small helpers shared by the CRUD endpoints: parsing, validation and list queries."""
 from datetime import date, time
 
 from flask import jsonify, request
@@ -8,8 +7,6 @@ from ..extensions import db
 
 
 class ValidationError(Exception):
-    """Raised when request data is invalid; turned into a 400 response."""
-
     def __init__(self, errors):
         self.errors = errors
 
@@ -21,7 +18,6 @@ def register_error_handlers(app):
 
     @app.errorhandler(IntegrityError)
     def handle_integrity(_):
-        # Safety net for database constraint errors (e.g. a row still referenced elsewhere).
         db.session.rollback()
         return jsonify(error="conflict", details={"message": "This record is still referenced by other data"}), 409
 
@@ -31,28 +27,18 @@ def register_error_handlers(app):
 
 
 def parse_time(value):
-    """'08:30' -> datetime.time (None stays None)."""
     return None if value in (None, "") else time.fromisoformat(value)
 
 
 def parse_date(value):
-    """'2026-10-14' -> datetime.date."""
     return date.fromisoformat(value)
 
 
 def fmt_time(t):
-    """datetime.time -> '08:30' (None stays None)."""
     return t.strftime("%H:%M") if t else None
 
 
 def clean_payload(data, spec, partial=False):
-    """Validate a JSON body against a field spec and return values ready for the model.
-
-    spec maps field name -> dict with:
-      required (bool), kind ("str" | "num" | "time" | "date"),
-      choices (optional list), positive (optional bool: number must be > 0).
-    With partial=True (PATCH/PUT updates) missing fields are simply skipped.
-    """
     if not isinstance(data, dict):
         raise ValidationError({"body": "JSON object expected"})
 
@@ -62,7 +48,7 @@ def clean_payload(data, spec, partial=False):
             if rules.get("required") and not partial:
                 errors[name] = "required"
             continue
-        if data[name] is None:   # explicit null: clears an optional field, never allowed on a required one
+        if data[name] is None:
             if rules.get("required"):
                 errors[name] = "required"
             else:
@@ -96,7 +82,6 @@ def clean_payload(data, spec, partial=False):
 
 
 def paginate(query, serializer):
-    """Apply ?page=&per_page= and return a JSON list response with totals."""
     page = max(request.args.get("page", 1, type=int), 1)
     per_page = min(max(request.args.get("per_page", 20, type=int), 1), 200)
     result = query.paginate(page=page, per_page=per_page, error_out=False)

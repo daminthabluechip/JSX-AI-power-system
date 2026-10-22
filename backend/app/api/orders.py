@@ -1,4 +1,3 @@
-"""/orders endpoints: create, read, update and delete delivery orders, and import them from CSV."""
 import csv
 import io
 
@@ -24,13 +23,12 @@ SPEC = {
     "target_date": {"kind": "date", "required": True},
     "earliest_arrival": {"kind": "time"},
     "latest_arrival": {"kind": "time"},
-    "required_vehicle_type": {"kind": "str", "choices": VEHICLE_TYPES},   # optional: null = any vehicle
+    "required_vehicle_type": {"kind": "str", "choices": VEHICLE_TYPES},
     "status": {"kind": "str", "choices": STATUSES},
 }
 
 
 def to_dict(o):
-    """Order -> JSON-friendly dict."""
     return {
         "id": o.id,
         "customer": o.customer,
@@ -49,15 +47,12 @@ def to_dict(o):
 
 
 def check_window(data, current=None):
-    """The earliest arrival must not be later than the latest arrival."""
     start = data.get("earliest_arrival", getattr(current, "earliest_arrival", None))
     end = data.get("latest_arrival", getattr(current, "latest_arrival", None))
     if start and end and start > end:
         return jsonify(error="validation_failed",
                        details={"latest_arrival": "must be after earliest_arrival"}), 400
 
-
-# ---------- CSV import ----------
 
 IMPORT_COLUMNS = ["customer", "address", "latitude", "longitude", "weight_kg", "volume_m3",
                   "priority", "target_date", "earliest_arrival", "latest_arrival", "required_vehicle_type"]
@@ -70,7 +65,6 @@ TEMPLATE_ROWS = [
 
 
 def read_csv_upload():
-    """Get the CSV text from a multipart upload (field "file") or from the raw request body."""
     if "file" in request.files:
         raw = request.files["file"].read()
     else:
@@ -78,14 +72,13 @@ def read_csv_upload():
     if not raw.strip():
         raise ValidationError({"file": "empty: send a CSV file (multipart field 'file') or the CSV text as the body"})
     try:
-        return raw.decode("utf-8-sig")   # utf-8-sig drops the BOM that Excel adds
+        return raw.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise ValidationError({"file": "must be UTF-8 text (in Excel use 'CSV UTF-8')"})
 
 
 @bp.get("/import/template")
 def import_template():
-    """GET /orders/import/template - a CSV with the right columns and two example rows."""
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(IMPORT_COLUMNS)
@@ -96,15 +89,6 @@ def import_template():
 
 @bp.post("/import")
 def import_orders():
-    """POST /orders/import?skip_invalid=false - create many orders from a CSV file.
-
-    Columns: customer, address, latitude, longitude, weight_kg, volume_m3, target_date are
-    required; priority (default medium), earliest_arrival and latest_arrival (HH:MM) and
-    required_vehicle_type (truck, van, refrigerated or flatbed) are optional.
-    Every row is checked first. By default ONE bad row rejects the whole file and nothing is
-    saved; with ?skip_invalid=true the valid rows are saved and the bad ones are reported.
-    Rows are numbered like in a spreadsheet (the header is row 1).
-    """
     skip_invalid = request.args.get("skip_invalid", "false").lower() == "true"
     reader = csv.DictReader(io.StringIO(read_csv_upload()))
     headers = [h.strip().lower() for h in (reader.fieldnames or [])]
@@ -118,8 +102,7 @@ def import_orders():
             raise ValidationError({"file": f"too many rows (maximum {MAX_IMPORT_ROWS})"})
         row = {k.strip().lower(): (v or "").strip() for k, v in raw.items() if k}
         if not any(row.values()):
-            continue   # skip blank lines
-        # Blank cells become null: optional fields stay empty, required ones are reported.
+            continue
         body = {c: (row.get(c) or None) for c in IMPORT_COLUMNS}
         body["priority"] = (body["priority"] or "medium").lower()
         if body["required_vehicle_type"]:
@@ -141,7 +124,6 @@ def import_orders():
 
 @bp.get("")
 def list_orders():
-    """GET /orders?q=&status=&priority=&date=&page=&per_page= - filtered, paginated list."""
     query = Order.query.order_by(Order.id)
     if status := request.args.get("status"):
         query = query.filter(Order.status == status)

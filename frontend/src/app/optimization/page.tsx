@@ -16,11 +16,10 @@ type Scenario = {
   title: string;
   icon: typeof Zap;
   box: string;
-  detail: string;                       // what will happen, using real data from the current plan
-  body: Record<string, unknown> | null; // POST /events body (null = cannot run on this plan)
+  detail: string;
+  body: Record<string, unknown> | null;
 };
 
-// Build the four scenarios from the current plan, so every button works on real vehicles/orders.
 function scenariosFor(plan: Plan | null): Scenario[] {
   const busiest = plan && [...plan.routes].sort((a, b) => b.stops.length - a.stops.length)[0];
   const lastStop = plan?.routes.at(-1)?.stops[0];
@@ -66,17 +65,15 @@ const CHANGE_STYLE: Record<string, string> = {
   added: "bg-emerald-50 text-emerald-600", now_assigned: "bg-emerald-50 text-emerald-600",
 };
 
-// Optimization page: report a disruption -> backend re-plans -> compare old and new plan.
 export default function OptimizationPage() {
   const [selected, setSelected] = useState(0);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comparison, setComparison] = useState<PlanComparison | null>(null);
   const [applied, setApplied] = useState<string | null>(null);
-  const [maps, setMaps] = useState<{ before: Plan; after: Plan } | null>(null); // plans shown on the map
+  const [maps, setMaps] = useState<{ before: Plan; after: Plan } | null>(null);
   const [mapView, setMapView] = useState<"before" | "after">("after");
 
-  // The plan being disrupted: the newest finished plan for today. Each applied event replaces it.
   const current = useApi(async () => {
     const { items } = await api.plans.list(todayISO());
     const latest = items.find((p) => p.status === "ready" || p.status === "dispatched");
@@ -93,10 +90,10 @@ export default function OptimizationPage() {
     setRunning(true);
     setError(null);
     try {
-      const out = await api.events.report(scenario.body); // POST /events -> starts the re-plan
-      const next = await waitForPlan(out.plan.id);        // poll until the optimizer is done
+      const out = await api.events.report(scenario.body);
+      const next = await waitForPlan(out.plan.id);
       if (next.status === "failed") throw new Error(next.error ?? "Re-planning failed");
-      setComparison(await api.plans.compare(out.replaces_plan_id, next.id)); // GET /plans/a/compare/b
+      setComparison(await api.plans.compare(out.replaces_plan_id, next.id));
       if (plan) setMaps({ before: plan, after: next });
       setMapView("after");
       setApplied(scenario.title);
@@ -132,7 +129,6 @@ export default function OptimizationPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        {/* Disruption scenarios */}
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="font-semibold">Disruptions</h3>
           <p className="text-xs text-slate-500">Select an event to simulate. Applying it changes data (e.g. a breakdown takes the vehicle out of service).</p>
@@ -155,7 +151,6 @@ export default function OptimizationPage() {
           </ul>
         </section>
 
-        {/* Re-plan panel */}
         <section className="rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 p-5 text-white">
           <div className="flex items-center gap-2">
             <Sparkles size={18} />
@@ -200,7 +195,6 @@ export default function OptimizationPage() {
         </section>
       </div>
 
-      {/* Before / after comparison */}
       {comparison && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center justify-between">
@@ -286,7 +280,6 @@ export default function OptimizationPage() {
         </section>
       )}
 
-      {/* Event history */}
       <section className="rounded-xl border border-slate-200 bg-white p-5">
         <h3 className="font-semibold">Optimization activity</h3>
         <p className="text-xs text-slate-500">Recent disruptions and the re-plans they triggered</p>

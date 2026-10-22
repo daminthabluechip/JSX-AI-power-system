@@ -1,15 +1,3 @@
-"""/events endpoints: report a disruption, which triggers a re-plan.
-
-Supported types:
-  vehicle_available vehicle_id               a vehicle can be used again (or is new): re-plan with it
-  delay         vehicle_id + delay_minutes   the vehicle cannot leave until that much later
-  breakdown     vehicle_id                   vehicle is taken out of service
-  rush_order    order {...}                  a new urgent order must be added
-  cancellation  order_id                     an order is removed
-
-Each event creates a NEW plan version for the same date (the old version is kept so the two
-can be compared with GET /plans/<id>/compare/<other>).
-"""
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, jsonify, request
@@ -41,7 +29,6 @@ def event_to_dict(e):
 
 
 def as_id(value):
-    """Accept only real integers as ids (rejects strings, floats, booleans)."""
     return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
@@ -50,8 +37,6 @@ def fail(field, message, status=400):
 
 
 def apply_event(body, plan):
-    """Validate the event, apply its side effects to vehicles/orders, and return
-    (event, shift_overrides) - or (None, error_response) when the request is invalid."""
     kind = body.get("type")
     event = Event(type=kind)
     overrides = {}
@@ -63,22 +48,18 @@ def apply_event(body, plan):
         event.vehicle_id = vehicle.id
 
         if kind == "breakdown":
-            # Out of service: the next plan only uses vehicles whose status is "available".
             vehicle.status = "maintenance"
         else:
             delay = body.get("delay_minutes")
             if not isinstance(delay, int) or delay <= 0:
                 return None, fail("delay_minutes", "positive whole number required")
             event.delay_minutes = delay
-            # The vehicle may not leave before (its planned departure + the delay).
             route = Route.query.filter_by(plan_id=plan.id, vehicle_id=vehicle.id).first()
             base = (route.planned_departure.hour * 60 + route.planned_departure.minute
                     if route else minutes(vehicle.shift_start, 7 * 60))
             overrides[vehicle.id] = base + delay
 
     elif kind == "vehicle_available":
-        # No data to change: the vehicle is already "available", so the re-plan below (which uses every
-        # available vehicle and every order still waiting, including the unassigned ones) picks it up.
         vehicle = db.session.get(Vehicle, as_id(body.get("vehicle_id"))) if as_id(body.get("vehicle_id")) else None
         if vehicle is None:
             return None, fail("vehicle_id", "existing vehicle required")
@@ -92,18 +73,18 @@ def apply_event(body, plan):
             return None, fail("order_id", "existing order required")
         if order.status in ("delivered", "cancelled"):
             return None, fail("order_id", f"order is already {order.status}", 409)
-        order.status = "cancelled"   # excluded from the next plan
+        order.status = "cancelled"
         event.order_id = order.id
 
     elif kind == "rush_order":
         payload = {"priority": "high", "target_date": plan.planning_date.isoformat(), **(body.get("order") or {})}
-        data = clean_payload(payload, ORDER_SPEC)   # raises ValidationError -> 400
+        data = clean_payload(payload, ORDER_SPEC)
         bad = check_window(data)
         if bad:
             return None, bad
         order = Order(**data)
         db.session.add(order)
-        db.session.flush()   # gives order.id
+        db.session.flush()
         event.order_id = order.id
 
     else:
@@ -114,15 +95,6 @@ def apply_event(body, plan):
 
 
 def live_replan_inputs(previous, event, overrides):
-    """Extra inputs when the day is already under way (a plan has been dispatched).
-
-    A live re-plan must not start everything from the depot at shift start. Instead:
-      - each vehicle starts from its latest reported position, no earlier than "now"
-      - only orders that are not yet delivered or cancelled are planned
-      - vehicles still on the road are used even though their status is "on_route"
-    Returns keyword arguments for start_plan, or None when nothing is being executed.
-    `overrides` (earliest departure per vehicle) is updated in place.
-    """
     live_plan = tracking.dispatched_plan()
     if live_plan is None or live_plan.planning_date != previous.planning_date:
         return None
@@ -140,7 +112,7 @@ def live_replan_inputs(previous, event, overrides):
     order_ids = sorted(o.id for o in Order.query.filter(Order.id.in_(wanted),
                                                         Order.status.notin_(["delivered", "cancelled"])))
 
-    if now_min is not None:   # nobody may depart before "now"
+    if now_min is not None:
         for vid in vehicle_ids:
             overrides[vid] = max(overrides.get(vid, 0), now_min)
         if event.type == "delay" and event.vehicle_id:
@@ -150,16 +122,10 @@ def live_replan_inputs(previous, event, overrides):
 
 @bp.post("")
 def report_event():
-    """POST /events {type, vehicle_id?, order_id?, delay_minutes?, order?, plan_id?, time_limit_s?}
-
-    Applies the disruption, then starts a re-plan in the background (202). Poll the returned
-    plan with GET /plans/<id>; compare it with the previous version via /plans/<id>/compare/<old>.
-    """
     body = request.get_json(silent=True)
     if not isinstance(body, dict):
         raise ValidationError({"body": "JSON object expected"})
 
-    # Which plan is being disrupted: the one named, or the newest finished (ready or running) plan.
     if body.get("plan_id") is not None:
         previous = db.session.get(Plan, as_id(body["plan_id"]) or 0)
     else:
@@ -171,11 +137,11 @@ def report_event():
     event, overrides = apply_event(body, previous)
     if event is None:
         db.session.rollback()
-        return overrides   # the error response
+        return overrides
 
-    live = live_replan_inputs(previous, event, overrides)   # None unless a plan is being executed
+    live = live_replan_inputs(previous, event, overrides)
 
-    new_plan = create_plan(previous.planning_date)   # commits (also saves the event + side effects)
+    new_plan = create_plan(previous.planning_date)
     event.handled_by_plan_id = new_plan.id
     db.session.commit()
 
@@ -189,7 +155,6 @@ def report_event():
 
 @bp.get("")
 def list_events():
-    """GET /events?limit= - newest first (feeds the 'Optimization activity' list)."""
     limit = min(request.args.get("limit", 20, type=int), 100)
     events = Event.query.order_by(Event.id.desc()).limit(limit).all()
     return jsonify(items=[event_to_dict(e) for e in events])

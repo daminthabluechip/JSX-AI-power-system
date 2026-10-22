@@ -22,12 +22,9 @@ const PRIORITY_STYLE: Record<Priority, string> = {
 
 type Phase = "select" | "solving" | "review" | "dispatching" | "dispatched";
 
-// Add or remove an id from a list of selected ids.
 const toggle = (list: number[], id: number) =>
   list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
 
-// The page can be opened on an existing plan with /route-planning?plan=12 (the bell menu links here
-// after re-planning). Load that plan first, then start the page with it already in the review step.
 export default function RoutePlanningPage() {
   return (
     <Suspense fallback={null}>
@@ -43,29 +40,23 @@ function RoutePlanningLoader() {
   return <RoutePlanningContent key={planId ?? "new"} initialPlan={linked.data} />;
 }
 
-// Route Planning: pick vehicles + orders, run the optimizer, review the plan, dispatch it.
 function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
   const vehicles = useApi(() => api.vehicles.list());
   const orders = useApi(() => api.orders.list(todayISO()));
 
-  // null = "the user has not changed the selection yet", so the defaults below apply.
   const [vehicleSel, setVehicleSel] = useState<number[] | null>(null);
   const [orderSel, setOrderSel] = useState<number[] | null>(null);
   const reviewable = initialPlan && (initialPlan.status === "ready" || initialPlan.status === "dispatched");
   const [phase, setPhase] = useState<Phase>(reviewable ? (initialPlan.status === "dispatched" ? "dispatched" : "review") : "select");
   const [plan, setPlan] = useState<Plan | null>(reviewable ? initialPlan : null);
-  // Vehicles that became available while this plan has unassigned orders (checked every 6 seconds)
   const offers = usePolling(() => api.notifications.list(), 6000);
   const planOffers = (offers.data?.items ?? []).filter((n) => n.plan_id === plan?.id);
   const [error, setError] = useState<string | null>(null);
-  // Shown after "Re-plan with <vehicle>": how many unassigned orders that vehicle managed to take
   const [replanNotice, setReplanNotice] = useState<string | null>(null);
 
-  // Only vehicles that can drive, and orders that still need a plan.
   const usableVehicles = (vehicles.data?.items ?? []).filter((v) => v.status !== "maintenance");
   const plannableOrders = (orders.data?.items ?? []).filter((o) => o.status === "pending" || o.status === "scheduled");
 
-  // Default selection: every available vehicle and every plannable order.
   const vehicleIds = vehicleSel ?? usableVehicles.filter((v) => v.status === "available").map((v) => v.id);
   const orderIds = orderSel ?? plannableOrders.map((o) => o.id);
   const setVehicleIds = setVehicleSel;
@@ -77,7 +68,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
   const totalLoadT = chosenOrders.reduce((s, o) => s + o.weight_kg, 0) / 1000;
   const canPlan = chosenVehicles.length > 0 && chosenOrders.length > 0 && phase !== "solving" && phase !== "dispatching";
 
-  // Changing the selection makes an existing plan stale.
   const edit = (fn: () => void) => { fn(); if (phase === "review") setPhase("select"); };
 
   async function generate() {
@@ -85,11 +75,9 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
     setReplanNotice(null);
     setPhase("solving");
     try {
-      // POST /plans/generate starts the optimizer in the background (202) ...
       const started = await api.plans.generate({
         date: todayISO(), vehicle_ids: vehicleIds, order_ids: orderIds,
       });
-      // ... then we poll GET /plans/{id} until it is ready or failed.
       const result = await waitForPlan(started.id);
       if (result.status === "failed") throw new Error(result.error ?? "Planning failed");
       setPlan(result);
@@ -104,9 +92,9 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
     if (!plan) return;
     setPhase("dispatching");
     try {
-      await api.plans.dispatch(plan.id); // POST /plans/{id}/dispatch
+      await api.plans.dispatch(plan.id);
       setPhase("dispatched");
-      setVehicleSel(null); // back to defaults once the data reloads
+      setVehicleSel(null);
       setOrderSel(null);
       vehicles.reload();
       orders.reload();
@@ -125,7 +113,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
         <p className="text-sm text-slate-500">Build an optimized delivery plan in a few simple steps.</p>
       </div>
 
-      {/* Step indicator */}
       <ol className="mx-auto flex max-w-xl items-center gap-4 text-xs font-medium">
         {["Select resources", "Review route", "Dispatch"].map((label, i) => (
           <li key={label} className="flex flex-1 items-center gap-2">
@@ -143,7 +130,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
 
       <div className="grid grid-cols-3 items-start gap-4">
         <div className="col-span-2 space-y-4">
-          {/* Vehicles */}
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -177,7 +163,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
             </ul>
           </section>
 
-          {/* Deliveries */}
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <div className="flex items-center justify-between">
               <div>
@@ -211,7 +196,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
           </section>
         </div>
 
-        {/* Route summary panel */}
         <aside className="sticky top-4 rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex items-center gap-2">
             <Sparkles size={16} className="text-blue-600" />
@@ -248,8 +232,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
                   </div>
                 ))}
               </dl>
-              {/* Compare with the simple "nearest stop next" plan. If the two serve different numbers of orders,
-                  total kilometres are not comparable, so compare kilometres per delivered order instead. */}
               {plan.baseline_served != null && plan.served !== plan.baseline_served && plan.distance_saved_per_order_pct != null ? (
                 <p className="mt-3 text-center text-xs text-emerald-700">
                   Serves {plan.served} orders; a simple plan serves {plan.baseline_served}.{" "}
@@ -295,7 +277,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
         </aside>
       </div>
 
-      {/* The planned routes: one card per vehicle with its ordered stops */}
       {plan && (phase === "review" || phase === "dispatched") && (
         <section className="space-y-4">
           <h3 className="text-lg font-bold">Planned routes</h3>
@@ -328,7 +309,6 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
                     </li>
                   ))}
                 </ol>
-                {/* Plain-language explanation of this vehicle's trip (open by default for small plans) */}
                 <RouteExplanation route={r} defaultOpen={plan.routes.length <= 3} />
               </div>
             ))}
@@ -347,13 +327,12 @@ function RoutePlanningContent({ initialPlan }: { initialPlan: Plan | null }) {
                 ))}
               </ul>
 
-              {/* Tell the dispatcher when another vehicle could take these orders, and let them act on it */}
               <div className="mt-4 border-t border-amber-200 pt-3">
                 {planOffers.length > 0 ? (
                   <VehicleAvailableOffers
                     notes={planOffers}
                     onDone={(newPlan, note) => {
-                      setPlan(newPlan); // show the new plan in place of this one
+                      setPlan(newPlan);
                       setPhase("review");
                       const planned = note.unassigned_total - newPlan.unassigned.length;
                       setReplanNotice(

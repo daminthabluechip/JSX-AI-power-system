@@ -10,7 +10,7 @@ def test_generate_and_read_plan(app, client):
     assert res.status_code == 202
     plan_id = res.get_json()["id"]
 
-    plan = client.get(f"/plans/{plan_id}").get_json()   # tests solve synchronously
+    plan = client.get(f"/plans/{plan_id}").get_json()
     assert plan["status"] == "ready"
     assert plan["version"] == 1 and plan["routes"]
     assert plan["total_distance_km"] > 0 and plan["solve_time_s"] is not None
@@ -20,11 +20,10 @@ def test_generate_and_read_plan(app, client):
         assert route["weight_utilization_pct"] <= 100 and route["volume_utilization_pct"] <= 100
         stops = route["stops"]
         assert [s["sequence"] for s in stops] == list(range(1, len(stops) + 1))
-        # arrival times never go backwards along a route
         times = [s["planned_arrival"] for s in stops]
         assert times == sorted(times)
         served += len(stops)
-    assert served + len(plan["unassigned"]) == 50   # every order is either planned or explained
+    assert served + len(plan["unassigned"]) == 50
     assert all(u["reason"] for u in plan["unassigned"])
 
 
@@ -66,7 +65,7 @@ def test_dispatch_updates_vehicles_and_orders(app, client):
     plan = client.get(f"/plans/{pid}").get_json()
 
     assert client.post(f"/plans/{pid}/dispatch").get_json()["status"] == "dispatched"
-    assert client.post(f"/plans/{pid}/dispatch").status_code == 409   # only once
+    assert client.post(f"/plans/{pid}/dispatch").status_code == 409
     used = {r["vehicle"]["id"] for r in plan["routes"]}
     for vid in used:
         assert client.get(f"/vehicles/{vid}").get_json()["status"] == "on_route"
@@ -81,11 +80,10 @@ def test_plan_detail_has_what_a_map_needs(app, client):
     depot = [plan["depot"]["latitude"], plan["depot"]["longitude"]]
     for route in plan["routes"]:
         stops = [[s["latitude"], s["longitude"]] for s in route["stops"]]
-        assert route["path"] == [depot] + stops + [depot]     # depot -> stops in order -> depot
+        assert route["path"] == [depot] + stops + [depot]
 
 
 def test_plan_detail_has_what_a_route_explanation_needs(app, client):
-    """Each vehicle's trip can be explained in words: distance, return time, customer windows."""
     seed(date(2026, 10, 14))
     pid = client.post("/plans/generate", json={"date": "2026-10-14", "time_limit_s": 2}).get_json()["id"]
     plan = client.get(f"/plans/{pid}").get_json()
@@ -95,12 +93,11 @@ def test_plan_detail_has_what_a_route_explanation_needs(app, client):
         assert route["return_time"] >= route["stops"][-1]["planned_departure"] > route["planned_departure"]
         assert route["vehicle"]["vehicle_type"] and route["vehicle"]["weight_capacity_kg"] > 0
         for stop in route["stops"]:
-            assert stop["window_start"] <= stop["planned_arrival"] <= stop["window_end"]   # the rule, visible
+            assert stop["window_start"] <= stop["planned_arrival"] <= stop["window_end"]
             assert stop["weight_kg"] > 0
 
 
 def test_plan_summary_compares_per_delivered_order_not_just_total_km(app, client):
-    """Total km is unfair when the plans serve different numbers of orders, so a per-order figure is given."""
     seed(date(2026, 10, 14))
     pid = client.post("/plans/generate", json={"date": "2026-10-14", "time_limit_s": 2}).get_json()["id"]
     p = client.get(f"/plans/{pid}").get_json()
@@ -109,5 +106,5 @@ def test_plan_summary_compares_per_delivered_order_not_just_total_km(app, client
     assert isinstance(p["baseline_served"], int) and p["baseline_served"] > 0
     expected = round(100 * (1 - (p["total_distance_km"] / p["served"]) / (p["baseline_distance_km"] / p["baseline_served"])), 1)
     assert p["distance_saved_per_order_pct"] == expected
-    if p["served"] > p["baseline_served"]:     # serving more orders makes total km look worse than per-order km
+    if p["served"] > p["baseline_served"]:
         assert p["distance_saved_per_order_pct"] > p["distance_saved_pct"]

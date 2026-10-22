@@ -19,8 +19,6 @@ type Props = {
   className?: string;
 };
 
-// Build a round blue/green marker with CSS instead of Leaflet's default image icon
-// (the default PNGs break under bundlers).
 const dot = (selected: boolean) =>
   L.divIcon({
     className: "",
@@ -30,8 +28,6 @@ const dot = (selected: boolean) =>
       box-shadow:0 1px 4px rgba(0,0,0,.4);background:${selected ? "#2563eb" : "#16a34a"}"></div>`,
   });
 
-// Zoom the map to show every vehicle and route. It only re-fits when the SET of vehicles changes,
-// not on every position update, so the map does not jump around while the user is looking at it.
 function FitToVehicles({ vehicles }: { vehicles: MapVehicle[] }) {
   const map = useMap();
   const signature = vehicles.map((v) => `${v.id}:${v.path.length}`).join("|");
@@ -43,16 +39,11 @@ function FitToVehicles({ vehicles }: { vehicles: MapVehicle[] }) {
   return null;
 }
 
-// Reusable Leaflet map showing vehicle markers and their planned routes.
-// Must run in the browser only, so import it through FleetMapLoader (ssr: false).
 export default function FleetMap({ vehicles, selectedId, onSelect, className }: Props) {
-  // Centre on Colombo-Kandy corridor (Sri Lanka) by default.
   const center: LatLng = [7.2, 80.1];
 
   return (
     <MapContainer center={center} zoom={9} scrollWheelZoom className={className ?? "h-full w-full"}>
-      {/* TODO: TOOL/API CALL HERE - OpenStreetMap tiles are fine for development; check the OSM
-          tile usage policy (or use a tile provider key) before any production deployment. */}
       <TileLayer
         attribution="&copy; OpenStreetMap contributors"
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -62,7 +53,6 @@ export default function FleetMap({ vehicles, selectedId, onSelect, className }: 
 
       {vehicles.map((v) => (
         <Fragment key={v.id}>
-          {/* Planned route as a dashed blue line */}
           {v.path.length > 1 && (
             <Polyline positions={v.path} pathOptions={{ color: "#2563eb", dashArray: "6 8", weight: 3 }} />
           )}

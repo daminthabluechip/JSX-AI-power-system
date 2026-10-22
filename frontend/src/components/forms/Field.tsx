@@ -1,4 +1,3 @@
-// One labelled form input with an error message underneath. Shared by all forms.
 type Props = {
   label: string;
   name: string;
@@ -8,7 +7,7 @@ type Props = {
   type?: "text" | "number" | "time" | "date";
   step?: string;
   hint?: string;
-  options?: { value: string; label: string }[]; // renders a <select> instead of an <input>
+  options?: { value: string; label: string }[];
 };
 
 export default function Field({ label, name, value, onChange, error, type = "text", step, hint, options }: Props) {

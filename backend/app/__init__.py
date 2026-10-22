@@ -1,4 +1,3 @@
-"""Flask application factory."""
 import hmac
 
 from dotenv import load_dotenv
@@ -15,24 +14,19 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Let the Next.js dashboard call this API from the browser.
     CORS(app, origins=app.config["CORS_ORIGIN"])
 
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # Import models so Alembic can see every table.
     from . import models  # noqa: F401
 
     @app.get("/health")
     def health():
-        """Simple health check (used by the dashboard status indicator)."""
         return jsonify(status="ok")
 
     @app.before_request
     def require_api_key():
-        """If an API key is configured, refuse any request that does not carry it. /health stays open (the
-        host uses it to check the service is alive) and so does OPTIONS (browser pre-flight checks)."""
         key = app.config.get("API_KEY")
         if not key or request.method == "OPTIONS" or request.path == "/health":
             return None
@@ -40,7 +34,6 @@ def create_app(config_class=Config):
             return jsonify(error="unauthorized", details={"message": "missing or wrong API key"}), 401
         return None
 
-    # API routes.
     from .api.helpers import register_error_handlers
     from .api.demo import bp as demo_bp
     from .api.events import bp as events_bp
@@ -66,14 +59,12 @@ def create_app(config_class=Config):
 
 
 def register_cli(app):
-    """Custom `flask` commands."""
     import click
 
     @app.cli.command("seed")
     @click.option("--reset", is_flag=True, help="Delete all existing data first.")
     @click.option("--demo", is_flag=True, help="Only fill in what is missing (safe to run on every start-up).")
     def seed_command(reset, demo):
-        """Load the sample depot, vehicles and orders."""
         from seed.seed_data import ensure_demo, reset as reset_data, seed
 
         if demo:

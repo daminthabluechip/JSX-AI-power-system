@@ -19,7 +19,6 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
-      # The proposal's target: at least 70% coverage on the planning and API code.
       - run: python -m pytest -q --cov=app --cov-report=term --cov-fail-under=70
 
   frontend:

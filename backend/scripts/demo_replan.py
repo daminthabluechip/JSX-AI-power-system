@@ -1,20 +1,10 @@
-"""Scripted demo: generate a plan, then trigger each of the four disruptions and re-plan.
-
-    python scripts/demo_replan.py --reseed      # wipe + reload sample data first (recommended)
-    python scripts/demo_replan.py               # run on whatever is in the database now
-
-It uses the real database and the real API (through Flask's test client), solving in the
-foreground so the output is easy to follow. Prints the proposal's targets as PASS/FAIL.
-NOTE: the disruptions change data (a vehicle goes into "maintenance", an order is cancelled,
-a rush order is created), so use --reseed to restore the sample data afterwards.
-"""
 import argparse
 import sys
 import time
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # make `app` importable
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import create_app  # noqa: E402
 from app.config import Config  # noqa: E402
@@ -22,7 +12,7 @@ from seed.seed_data import reset, seed  # noqa: E402
 
 
 class DemoConfig(Config):
-    PLAN_SYNC = True  # solve inside the request so each step finishes before the next
+    PLAN_SYNC = True
 
 
 def line(text=""):
@@ -50,7 +40,6 @@ def main():
         client = app.test_client()
         checks = []
 
-        # 1. Initial plan ---------------------------------------------------------------
         line("\n1. Generate the day's plan")
         t0 = time.time()
         res = client.post("/plans/generate", json={"date": date.today().isoformat()})
@@ -65,7 +54,6 @@ def main():
         busiest = max(plan["routes"], key=lambda r: len(r["stops"]))
         some_stop = plan["routes"][-1]["stops"][0]
 
-        # 2. The four disruptions -----------------------------------------------------
         disruptions = [
             ("2. DELAY: " + busiest["vehicle"]["registration"] + " is stuck for 60 minutes",
              {"type": "delay", "vehicle_id": busiest["vehicle"]["id"], "delay_minutes": 60}),
@@ -101,7 +89,6 @@ def main():
                  f"distance {diff['distance_delta_km']:+} km")
             previous = new
 
-        # 3. Targets -------------------------------------------------------------------
         checks.append(("Re-plan in 15 s or less (slowest of 4)", slowest <= 15, f"{slowest:.1f}s"))
         checks.append(("Final plan has no unassigned reasons missing",
                        all(u["reason"] for u in previous["unassigned"]), f"{len(previous['unassigned'])} unassigned"))

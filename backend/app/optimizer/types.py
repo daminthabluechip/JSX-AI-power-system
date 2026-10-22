@@ -1,8 +1,3 @@
-"""Plain data classes passed in and out of the optimizer.
-
-The optimizer knows nothing about the database or Flask: it receives these objects and
-returns a PlanResult. All clock times are "minutes since midnight" (e.g. 08:30 -> 510).
-"""
 from dataclasses import dataclass, field
 
 DAY_MINUTES = 24 * 60
@@ -13,13 +8,10 @@ class VehicleSpec:
     id: int
     weight_capacity_kg: int
     volume_capacity_m3: float
-    shift_start: int = 7 * 60     # earliest departure from the depot
-    shift_end: int = 19 * 60      # must be back at the depot by then
-    # Matrix row where this vehicle starts. 0 = the depot; re-planning a vehicle that is already
-    # out on the road uses an extra matrix row holding its current position (and shift_start is
-    # then "now").
+    shift_start: int = 7 * 60
+    shift_end: int = 19 * 60
     start_node: int = 0
-    vehicle_type: str = "truck"   # e.g. truck, van, refrigerated, flatbed
+    vehicle_type: str = "truck"
 
 
 @dataclass
@@ -27,37 +19,37 @@ class OrderSpec:
     id: int
     weight_kg: float
     volume_m3: float
-    priority: str = "medium"      # critical | high | medium | low
-    tw_start: int = 0             # customer window: earliest arrival
-    tw_end: int = DAY_MINUTES     # customer window: latest arrival
-    service_min: int = 10         # time spent unloading at the stop
-    required_vehicle_type: str | None = None   # only a vehicle of this type may serve the order
+    priority: str = "medium"
+    tw_start: int = 0
+    tw_end: int = DAY_MINUTES
+    service_min: int = 10
+    required_vehicle_type: str | None = None
 
 
 @dataclass
 class PlannedStop:
     order_id: int
-    sequence: int                 # 1 = first stop
-    arrival: int                  # minutes since midnight
+    sequence: int
+    arrival: int
     departure: int
 
 
 @dataclass
 class PlannedRoute:
     vehicle_id: int
-    departure: int = 0            # when the vehicle leaves its start point
-    start_node: int = 0           # matrix row it starts from (0 = depot)
+    departure: int = 0
+    start_node: int = 0
     stops: list = field(default_factory=list)
     load_kg: float = 0
     volume_m3: float = 0
-    distance_m: int = 0           # depot -> stops -> depot
-    return_time: int = 0          # when it is back at the depot
+    distance_m: int = 0
+    return_time: int = 0
 
 
 @dataclass
 class PlanResult:
     routes: list = field(default_factory=list)
-    unassigned: list = field(default_factory=list)   # [{"order_id": 3, "reason": "..."}]
+    unassigned: list = field(default_factory=list)
     solve_time_s: float = 0.0
 
     @property

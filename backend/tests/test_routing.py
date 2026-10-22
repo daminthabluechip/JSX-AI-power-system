@@ -1,4 +1,3 @@
-"""The routing providers. OSRM is tested against a fake server so the tests need no network."""
 import pytest
 
 from app.services import routing_service
@@ -20,7 +19,6 @@ class FakeResponse:
 
 
 def fake_osrm(monkeypatch, body=None, calls=None):
-    """Replace requests.get with a canned OSRM /table answer (2 points: 100 km, 3600 s)."""
     body = body or {"code": "Ok", "distances": [[0, 100000], [100000, 0]], "durations": [[0, 3600], [3600, 0]]}
 
     def fake_get(url, params=None, timeout=None):
@@ -32,23 +30,23 @@ def fake_osrm(monkeypatch, body=None, calls=None):
 
 
 def test_haversine_distance_is_realistic():
-    assert 90_000 < haversine_m(COLOMBO, KANDY) < 100_000      # Colombo-Kandy is about 94 km in a straight line
+    assert 90_000 < haversine_m(COLOMBO, KANDY) < 100_000
     assert haversine_m(COLOMBO, COLOMBO) == 0
 
 
 def test_haversine_matrix_shape_and_detour():
     dist, dur = HaversineProvider(speed_kmh=60, detour=1.5).matrix([COLOMBO, KANDY])
     assert dist[0][0] == 0 and dist[0][1] == dist[1][0]
-    assert dist[0][1] == pytest.approx(haversine_m(COLOMBO, KANDY) * 1.5, abs=2)   # detour applied to distance
-    assert dur[0][1] == pytest.approx(dist[0][1] / 1000, abs=1)                    # 60 km/h = 1 km per minute
+    assert dist[0][1] == pytest.approx(haversine_m(COLOMBO, KANDY) * 1.5, abs=2)
+    assert dur[0][1] == pytest.approx(dist[0][1] / 1000, abs=1)
 
 
 def test_osrm_sends_lon_lat_order_and_parses_the_answer(monkeypatch):
     seen = []
     fake_osrm(monkeypatch, calls=seen)
     dist, dur = OsrmProvider("http://osrm.test/").matrix([COLOMBO, KANDY])
-    assert "79.8612,6.9271;80.6337,7.2906" in seen[0]          # OSRM wants longitude first
-    assert dist == [[0, 100000], [100000, 0]] and dur == [[0, 60], [60, 0]]   # seconds -> minutes
+    assert "79.8612,6.9271;80.6337,7.2906" in seen[0]
+    assert dist == [[0, 100000], [100000, 0]] and dur == [[0, 60], [60, 0]]
 
 
 def test_osrm_caches_pairs_and_only_asks_for_new_points(monkeypatch):
@@ -57,15 +55,15 @@ def test_osrm_caches_pairs_and_only_asks_for_new_points(monkeypatch):
     provider = OsrmProvider()
     provider.matrix([COLOMBO, KANDY])
     provider.matrix([COLOMBO, KANDY])
-    assert len(seen) == 1                                       # second call served from the cache
-    provider.matrix([KANDY, COLOMBO])                            # same pairs, other order: still cached
+    assert len(seen) == 1
+    provider.matrix([KANDY, COLOMBO])
     assert len(seen) == 1
 
 
 def test_osrm_time_factor_scales_times_but_not_distances(monkeypatch):
     fake_osrm(monkeypatch)
     dist, dur = OsrmProvider(time_factor=1.5).matrix([COLOMBO, KANDY])
-    assert dist[0][1] == 100000 and dur[0][1] == 90             # 60 min x 1.5
+    assert dist[0][1] == 100000 and dur[0][1] == 90
 
 
 def test_osrm_errors_are_raised_not_swallowed(monkeypatch):
@@ -82,4 +80,4 @@ def test_provider_choice_follows_the_config():
     assert isinstance(get_provider({"ROUTING_PROVIDER": "haversine"}), HaversineProvider)
     osrm = get_provider({"ROUTING_PROVIDER": "osrm", "OSRM_URL": "http://a.test", "OSRM_TIME_FACTOR": 1.3})
     assert isinstance(osrm, OsrmProvider) and osrm.time_factor == 1.3
-    assert get_provider({"ROUTING_PROVIDER": "osrm", "OSRM_URL": "http://b.test"}) is not osrm   # new settings, new provider
+    assert get_provider({"ROUTING_PROVIDER": "osrm", "OSRM_URL": "http://b.test"}) is not osrm

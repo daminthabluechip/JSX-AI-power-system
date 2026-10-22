@@ -2,8 +2,6 @@
 
 import dynamic from "next/dynamic";
 
-// Leaflet touches `window`, so it can't render on the server.
-// Pages import this wrapper instead of FleetMap directly.
 const FleetMapLoader = dynamic(() => import("./FleetMap"), {
   ssr: false,
   loading: () => (

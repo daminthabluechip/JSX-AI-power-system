@@ -29,20 +29,16 @@ const PRIORITY_STYLE: Record<Priority, string> = {
 
 const TABS: ("all" | OrderStatus)[] = ["all", "pending", "scheduled", "in_transit", "delivered"];
 
-// Deliveries page: status tabs, search, priority filter and the orders table (GET /orders).
-// The ETA column comes from the newest plan for today (planned arrival of each stop).
-// New / edit use OrderForm (POST /orders, PATCH /orders/{id}); delete uses DELETE /orders/{id}.
 export default function DeliveriesPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>("all");
   const [priority, setPriority] = useState<"all" | Priority>("all");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<Order | "new" | null>(null); // which form is open
+  const [editing, setEditing] = useState<Order | "new" | null>(null);
   const [deleting, setDeleting] = useState<Order | null>(null);
   const [importing, setImporting] = useState(false);
 
   const orders = useApi(() => api.orders.list(todayISO()));
 
-  // Planned arrival per order from the newest finished plan, if one exists.
   const etas = useApi(async () => {
     const { items } = await api.plans.list(todayISO());
     const latest = items.find((p) => p.status === "ready" || p.status === "dispatched");
@@ -81,7 +77,6 @@ export default function DeliveriesPage() {
 
       {orders.error && <ErrorBox message={orders.error} />}
 
-      {/* Status tabs with counts */}
       <div className="flex gap-6 border-b border-slate-200 text-sm">
         {TABS.map((t) => {
           const count = t === "all" ? all.length : all.filter((o) => o.status === t).length;

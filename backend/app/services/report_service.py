@@ -1,25 +1,16 @@
-"""Numbers for the Reports page: delivery performance, distance, utilization and insights.
-
-Everything is computed from stored data:
-  * the plan of record for each day (dispatched one if there is one, else the newest finished one)
-  * delivered orders, and stops with a recorded actual arrival time (from tracking)
-No figure is invented: where there is no data the value is None and the page says so.
-"""
 from datetime import date, timedelta
 
 from ..extensions import db
 from ..models import Order, Plan, Route, Stop, Vehicle
 
-ON_TIME_GRACE_MIN = 0   # arriving after the customer's latest time by more than this = late
+ON_TIME_GRACE_MIN = 0
 
 
 def minutes(dt_or_time):
-    """datetime or time -> minutes since midnight."""
     return dt_or_time.hour * 60 + dt_or_time.minute
 
 
 def plan_of_record(day):
-    """The plan that counts for a day: the newest dispatched plan, else the newest finished one."""
     dispatched = Plan.query.filter_by(planning_date=day, status="dispatched").order_by(Plan.id.desc()).first()
     if dispatched:
         return dispatched
@@ -28,13 +19,12 @@ def plan_of_record(day):
 
 
 def delivery_timing(day):
-    """On-time statistics for stops with a recorded arrival on this day -> (measured, late, delays)."""
     rows = (db.session.query(Stop, Order).join(Route, Stop.route_id == Route.id)
             .join(Plan, Route.plan_id == Plan.id).join(Order, Stop.order_id == Order.id)
             .filter(Plan.planning_date == day, Stop.actual_arrival.isnot(None)).all())
     seen, late, delays = set(), 0, []
     for stop, order in rows:
-        if order.id in seen:   # the same order can be on several plan versions; count it once
+        if order.id in seen:
             continue
         seen.add(order.id)
         if order.latest_arrival and minutes(stop.actual_arrival) > minutes(order.latest_arrival) + ON_TIME_GRACE_MIN:
@@ -47,7 +37,7 @@ def build_report(days=30, today=None):
     today = today or date.today()
     start = today - timedelta(days=days - 1)
     daily, measured_total, late_total, delays_all = [], 0, 0, []
-    util_by_vehicle = {}   # vehicle -> [weight utilization %, volume utilization %] lists
+    util_by_vehicle = {}
     unassigned_total = 0
 
     for offset in range(days):
@@ -107,7 +97,6 @@ def build_report(days=30, today=None):
 
 
 def insights(kpis, util_by_vehicle, unassigned_total, delays):
-    """Plain, rule-based observations drawn from the figures above (no AI model involved)."""
     out = []
 
     if kpis["distance_saved_pct"] is not None:
@@ -150,7 +139,6 @@ def insights(kpis, util_by_vehicle, unassigned_total, delays):
 
 
 def report_csv(report):
-    """The daily table as CSV text (for the Export report button)."""
     cols = ["date", "orders", "delivered", "late", "on_time_pct", "planned_km", "baseline_km", "utilization_pct"]
     lines = [",".join(cols)]
     for row in report["daily"]:

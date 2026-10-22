@@ -1,4 +1,3 @@
-"""/reports endpoints: figures for the Reports & Analytics page."""
 from datetime import date
 
 from flask import Blueprint, Response, jsonify, request
@@ -10,7 +9,6 @@ bp = Blueprint("reports", __name__, url_prefix="/reports")
 
 
 def parse_params():
-    """?days=30 (1-365) and an optional ?today=YYYY-MM-DD (the 'current day', for testing)."""
     days = request.args.get("days", 30, type=int)
     if not 1 <= days <= 365:
         raise ValidationError({"days": "between 1 and 365"})
@@ -23,14 +21,12 @@ def parse_params():
 
 @bp.get("")
 def report():
-    """GET /reports?days=30 - KPIs, per-day figures and rule-based insights."""
     days, today = parse_params()
     return jsonify(build_report(days, today))
 
 
 @bp.get("/export")
 def export():
-    """GET /reports/export?days=30 - the per-day table as a CSV download."""
     days, today = parse_params()
     csv = report_csv(build_report(days, today))
     return Response(csv, mimetype="text/csv",

@@ -1,4 +1,3 @@
-"""/plans endpoints: generate a plan and read it back."""
 from datetime import date
 
 from flask import Blueprint, current_app, jsonify, request
@@ -10,18 +9,14 @@ from .helpers import ValidationError, fmt_time, parse_date
 
 bp = Blueprint("plans", __name__, url_prefix="/plans")
 
-RESCHEDULE_MIN = 5   # an arrival time must move by at least this many minutes to count as a change
+RESCHEDULE_MIN = 5
 
 
 def plan_summary(p):
-    """The figures shown at the top of a plan (without routes)."""
     saved = None
     if p.baseline_distance_km and p.total_distance_km is not None:
         saved = round(100 * (1 - p.total_distance_km / p.baseline_distance_km), 1)
 
-    # Total kilometres are not a fair comparison when the two plans serve different numbers of orders:
-    # the optimizer would rather drive further than leave an order out, while the baseline simply skips
-    # it. Kilometres per delivered order compares like with like.
     served = sum(len(r.stops) for r in p.routes)
     per_order_saved = None
     if p.baseline_served and served and p.baseline_distance_km and p.total_distance_km is not None:
@@ -36,15 +31,14 @@ def plan_summary(p):
         "total_time_min": p.total_time_min,
         "solve_time_s": p.solve_time_s,
         "baseline_distance_km": p.baseline_distance_km,
-        "distance_saved_pct": saved,  # total km vs. the nearest-neighbour baseline (can mislead, see above)
+        "distance_saved_pct": saved,
         "served": served,
         "baseline_served": p.baseline_served,
-        "distance_saved_per_order_pct": per_order_saved,  # km per delivered order vs. the baseline
+        "distance_saved_per_order_pct": per_order_saved,
     }
 
 
 def plan_detail(p):
-    """Full plan: summary + one entry per vehicle route with its ordered stops."""
     vehicles = {v.id: v for v in Vehicle.query.filter(Vehicle.id.in_([r.vehicle_id for r in p.routes]))}
     order_ids = [s.order_id for r in p.routes for s in r.stops] + [u["order_id"] for u in (p.unassigned or [])]
     orders = {o.id: o for o in Order.query.filter(Order.id.in_(order_ids))}
@@ -57,7 +51,6 @@ def plan_detail(p):
         start = [r.start_latitude, r.start_longitude] if r.start_latitude is not None else depot_xy
         stop_xy = [[orders[s.order_id].latitude, orders[s.order_id].longitude] for s in r.stops]
         routes.append({
-            # start point -> each stop in order -> back to the depot (for drawing the route on a map)
             "path": ([start] + stop_xy + [depot_xy]) if depot_xy else stop_xy,
             "id": r.id,
             "vehicle": {"id": v.id, "registration": v.registration, "model": v.model, "driver": v.driver,
@@ -68,7 +61,6 @@ def plan_detail(p):
             "distance_km": r.distance_km,
             "load_kg": r.load_kg,
             "volume_m3": r.volume_m3,
-            # how full the vehicle is, as a percentage of its capacity
             "weight_utilization_pct": round(100 * r.load_kg / v.weight_capacity_kg, 1),
             "volume_utilization_pct": round(100 * r.volume_m3 / v.volume_capacity_m3, 1),
             "stops": [{
@@ -79,7 +71,6 @@ def plan_detail(p):
                 "latitude": orders[s.order_id].latitude,
                 "longitude": orders[s.order_id].longitude,
                 "priority": orders[s.order_id].priority,
-                # what the customer asked for, so a route can be explained against it
                 "window_start": fmt_time(orders[s.order_id].earliest_arrival),
                 "window_end": fmt_time(orders[s.order_id].latest_arrival),
                 "weight_kg": orders[s.order_id].weight_kg,
@@ -98,11 +89,6 @@ def plan_detail(p):
 
 @bp.post("/generate")
 def generate():
-    """POST /plans/generate {date?, vehicle_ids?, order_ids?, time_limit_s?}
-
-    Returns 202 immediately with the plan id; poll GET /plans/<id> until status is
-    "ready" (or "failed").
-    """
     body = request.get_json(silent=True) or {}
     try:
         day = parse_date(body["date"]) if body.get("date") else date.today()
@@ -121,7 +107,6 @@ def generate():
 
 @bp.get("")
 def list_plans():
-    """GET /plans?date= - newest first."""
     query = Plan.query.order_by(Plan.id.desc())
     if day := request.args.get("date"):
         query = query.filter(Plan.planning_date == day)
@@ -130,12 +115,10 @@ def list_plans():
 
 @bp.get("/<int:plan_id>")
 def get_plan(plan_id):
-    """GET /plans/<id> - the plan with routes, stops, arrival times and vehicle utilization."""
     return jsonify(plan_detail(db.get_or_404(Plan, plan_id)))
 
 
 def assignments(p):
-    """order_id -> where the plan serves it (vehicle, stop number, arrival)."""
     out = {}
     for r in p.routes:
         reg = db.session.get(Vehicle, r.vehicle_id).registration
@@ -147,14 +130,6 @@ def assignments(p):
 
 @bp.get("/<int:plan_id>/compare/<int:other_id>")
 def compare_plans(plan_id, other_id):
-    """GET /plans/<a>/compare/<b> - what changed going from plan a (before) to plan b (after).
-
-    Each order is classified as: unchanged, rescheduled (same vehicle, arrival time moved by
-    RESCHEDULE_MIN or more), reassigned (different vehicle), dropped (was served, now
-    unassigned), completed (already delivered, so no longer planned), removed (no longer in the
-    plan, e.g. cancelled), now_assigned or added. Stop numbers are ignored on purpose: they
-    shift whenever earlier stops are delivered, without anything really changing.
-    """
     a, b = db.get_or_404(Plan, plan_id), db.get_or_404(Plan, other_id)
     before, after = assignments(a), assignments(b)
     unassigned_after = {u["order_id"] for u in (b.unassigned or [])}
@@ -185,7 +160,7 @@ def compare_plans(plan_id, other_id):
         elif now:
             kind = "now_assigned" if oid in unassigned_before else "added"
         else:
-            continue  # unassigned in both plans: nothing changed
+            continue
         changes.append({"order_id": oid, "change": kind, "before": was, "after": now})
 
     names = {o.id: o.customer for o in Order.query.filter(Order.id.in_([c["order_id"] for c in changes]))}
@@ -207,18 +182,12 @@ def compare_plans(plan_id, other_id):
 
 @bp.post("/<int:plan_id>/dispatch")
 def dispatch_plan(plan_id):
-    """POST /plans/<id>/dispatch - send a finished plan to the vehicles.
-
-    Marks the plan "dispatched", the vehicles it uses "on_route" and its orders "in_transit".
-    TODO: TOOL/API CALL HERE - notify drivers / the JXG tracking system once that integration exists.
-    """
     plan = db.get_or_404(Plan, plan_id)
     if plan.status != "ready":
         return jsonify(error="conflict", details={"status": f"plan is {plan.status}, only ready plans can be dispatched"}), 409
-    # A newly dispatched plan replaces whichever plan was being executed for that date.
     for old in Plan.query.filter_by(status="dispatched", planning_date=plan.planning_date):
         old.status = "superseded"
-        for route in old.routes:   # vehicles the new plan no longer uses go back to the pool
+        for route in old.routes:
             vehicle = db.session.get(Vehicle, route.vehicle_id)
             if vehicle.status == "on_route":
                 vehicle.status = "available"

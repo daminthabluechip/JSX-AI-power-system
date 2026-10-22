@@ -1,19 +1,12 @@
-"""Sample data matching the proposal's test set: 1 depot, 10 vehicles, 50 orders.
-
-Run with:  flask --app wsgi seed        (add --reset to wipe and reload)
-A fixed random seed makes the data identical on every run, so results are repeatable.
-"""
 import random
 from datetime import date, time, timedelta
 
 from app.extensions import db
 from app.models import Depot, Event, Order, Plan, Position, Route, Stop, Vehicle
 
-# Depot: Colombo
 DEPOT = dict(name="Colombo Central Depot", latitude=6.9271, longitude=79.8612,
              opens_at=time(6, 0), closes_at=time(20, 0))
 
-# (registration, model, driver, weight kg, volume m3, status, type)
 VEHICLES = [
     ("VH-2048", "Volvo FH16", "Nimal", 22000, 60, "on_route", "truck"),
     ("VH-1042", "Mercedes Actros", "Kamal", 18000, 50, "available", "refrigerated"),
@@ -27,10 +20,8 @@ VEHICLES = [
     ("VH-6001", "Hino 500", "Dinesh", 12000, 36, "available", "flatbed"),
 ]
 
-# Customers whose orders need a special vehicle type (everyone else accepts any vehicle).
 REQUIRED_TYPE = {"MEDICAL": "refrigerated", "City Pharma": "refrigerated", "BuildCo": "flatbed"}
 
-# Delivery towns (name, lat, lon) around the Colombo - Kandy - Galle area.
 TOWNS = [
     ("Colombo 10", 6.9300, 79.8660), ("Dehiwala", 6.8512, 79.8650), ("Negombo", 7.2008, 79.8737),
     ("Gampaha", 7.0873, 79.9925), ("Kurunegala", 7.4863, 80.3647), ("Kandy", 7.2906, 80.6337),
@@ -40,23 +31,21 @@ TOWNS = [
 
 CUSTOMERS = ["DASUN", "FOOD", "MEDICAL", "Hardware", "DESHAN", "Fresh Mart", "City Pharma",
              "BuildCo", "AgroSupply", "Textile Hub"]
-PRIORITIES = ["critical", "high", "medium", "medium", "low"]  # weighted toward medium
+PRIORITIES = ["critical", "high", "medium", "medium", "low"]
 WINDOWS = [(time(8, 0), time(12, 0)), (time(9, 0), time(15, 0)),
            (time(12, 0), time(17, 0)), (time(8, 0), time(17, 0))]
 
 
 def reset():
-    """Delete all rows, children before parents (foreign keys)."""
     for model in (Stop, Route, Event, Position, Plan, Order, Vehicle, Depot):
         db.session.query(model).delete()
     db.session.commit()
 
 
 def add_fleet():
-    """Create the depot and the 10 sample vehicles."""
     depot = Depot(**DEPOT)
     db.session.add(depot)
-    db.session.flush()  # gives depot.id
+    db.session.flush()
 
     for reg, model, driver, kg, m3, status, kind in VEHICLES:
         db.session.add(Vehicle(
@@ -67,7 +56,6 @@ def add_fleet():
 
 
 def add_orders(day):
-    """Create the 50 sample orders for one day (the same 50 every time: the random seed is fixed)."""
     rng = random.Random(42)
     for i in range(50):
         town, lat, lon = rng.choice(TOWNS)
@@ -77,7 +65,6 @@ def add_orders(day):
             customer=f"{name} #{i + 1}",
             required_vehicle_type=REQUIRED_TYPE.get(name),
             address=f"{rng.randint(1, 250)} Main Street, {town}",
-            # small jitter so orders in the same town are not at identical points
             latitude=lat + rng.uniform(-0.02, 0.02),
             longitude=lon + rng.uniform(-0.02, 0.02),
             weight_kg=round(rng.uniform(200, 2400), 1),
@@ -91,21 +78,12 @@ def add_orders(day):
 
 
 def seed(day=None):
-    """Depot + vehicles + 50 orders for `day` (default today). Use reset() first to start clean."""
     add_fleet()
     add_orders(day or date.today())
     db.session.commit()
 
 
 def ensure_demo(days_around=1):
-    """Make sure a demo always has something to plan, without deleting anything.
-
-    Creates the depot and vehicles if they are missing, and adds the 50 sample orders for each day
-    from `days_around` days ago to `days_around` days ahead that has no orders yet. Several days
-    because "today" differs by timezone (the server may be on UTC while the user is in Sri Lanka),
-    and the demo must still open on a day with orders. Safe to run on every start-up.
-    Returns the list of days that were filled.
-    """
     if Depot.query.first() is None:
         add_fleet()
     filled = []

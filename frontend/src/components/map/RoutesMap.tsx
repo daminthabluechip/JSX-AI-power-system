@@ -10,11 +10,10 @@ import { routeColor } from "./routeColors";
 type Props = {
   routes: PlanRoute[];
   depot: { name: string; latitude: number; longitude: number } | null;
-  hiddenVehicleIds?: number[]; // routes switched off in the legend
+  hiddenVehicleIds?: number[];
   className?: string;
 };
 
-// A numbered circle for a stop, in the colour of its route.
 const stopIcon = (n: number, color: string) =>
   L.divIcon({
     className: "",
@@ -32,7 +31,6 @@ const depotIcon = L.divIcon({
     box-shadow:0 1px 3px rgba(0,0,0,.5);font:700 12px sans-serif;display:flex;align-items:center;justify-content:center">D</div>`,
 });
 
-// Zoom the map to fit every visible point whenever the routes change.
 function FitToRoutes({ points }: { points: LatLng[] }) {
   const map = useMap();
   useEffect(() => {
@@ -41,8 +39,6 @@ function FitToRoutes({ points }: { points: LatLng[] }) {
   return null;
 }
 
-// Shows every route of a plan: coloured line per vehicle, numbered stops, depot marker.
-// Browser-only (Leaflet), so pages import it through RoutesMapLoader.
 export default function RoutesMap({ routes, depot, hiddenVehicleIds = [], className }: Props) {
   const visible = routes.map((r, i) => ({ route: r, color: routeColor(i) })).filter(({ route }) => !hiddenVehicleIds.includes(route.vehicle.id));
   const points: LatLng[] = visible.flatMap(({ route }) => route.path);

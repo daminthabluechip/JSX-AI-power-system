@@ -14,7 +14,6 @@ def hm(text):
 
 
 def run_day(app, client, delay_vehicle_minutes=0):
-    """Seed, plan, dispatch and simulate the whole day (optionally with one badly delayed vehicle)."""
     seed(DAY)
     pid = client.post("/plans/generate", json={"date": DAY.isoformat(), "time_limit_s": 2}).get_json()["id"]
     client.post(f"/plans/{pid}/dispatch")
@@ -24,7 +23,7 @@ def run_day(app, client, delay_vehicle_minutes=0):
     busiest = max(plan["routes"], key=lambda r: len(r["stops"]))["vehicle"]["id"]
     if delay_vehicle_minutes:
         sim.delays[busiest] = [(start, delay_vehicle_minutes)]
-    for t in range(start, 23 * 60 + 1, 20):      # a position report every 20 simulated minutes
+    for t in range(start, 23 * 60 + 1, 20):
         sim.tick(app.config, t)
     return plan, busiest
 
@@ -57,7 +56,6 @@ def test_a_long_delay_shows_up_as_late_deliveries(app, client):
     run_day(app, client, delay_vehicle_minutes=240)
     r = report(client)
 
-    # cross-check the reported count against the raw data
     late = 0
     for stop, order in db.session.query(Stop, Order).join(Order, Stop.order_id == Order.id).filter(Stop.actual_arrival.isnot(None)):
         if order.latest_arrival and stop.actual_arrival.hour * 60 + stop.actual_arrival.minute > order.latest_arrival.hour * 60 + order.latest_arrival.minute:
@@ -71,7 +69,7 @@ def test_a_long_delay_shows_up_as_late_deliveries(app, client):
 def test_range_and_csv_export(app, client):
     run_day(app, client)
     assert report(client, days=7)["kpis"]["planned_km"] == report(client, days=1)["kpis"]["planned_km"]
-    assert report(client, today="2026-12-01")["daily"] == []          # the day is outside the range
+    assert report(client, today="2026-12-01")["daily"] == []
 
     res = client.get(f"/reports/export?days=1&today={DAY.isoformat()}")
     assert res.status_code == 200 and res.mimetype == "text/csv"

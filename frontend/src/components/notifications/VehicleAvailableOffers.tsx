@@ -4,9 +4,6 @@ import { Loader2, Truck } from "lucide-react";
 import { useState } from "react";
 import { api, PRIORITY_LABEL, VEHICLE_TYPE_LABEL, waitForPlan, type AppNotification, type Plan } from "@/lib/api";
 
-// One card per vehicle that has become available while orders are still unassigned. The button
-// re-plans with that vehicle (POST /events, type "vehicle_available"), waits for the new plan, and
-// hands it to the caller. Used in the bell menu and in the "Unassigned orders" box.
 export default function VehicleAvailableOffers({
   notes,
   onDone,
@@ -14,7 +11,7 @@ export default function VehicleAvailableOffers({
   notes: AppNotification[];
   onDone?: (plan: Plan, note: AppNotification) => void;
 }) {
-  const [busyId, setBusyId] = useState<number | null>(null); // vehicle being re-planned with
+  const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ registration: string; plan: Plan; before: number } | null>(null);
 
@@ -23,8 +20,8 @@ export default function VehicleAvailableOffers({
     setError(null);
     setResult(null);
     try {
-      const out = await api.events.report(note.suggested_event); // starts the re-plan in the background
-      const plan = await waitForPlan(out.plan.id); // poll until the optimizer is done
+      const out = await api.events.report(note.suggested_event);
+      const plan = await waitForPlan(out.plan.id);
       if (plan.status === "failed") throw new Error(plan.error ?? "Re-planning failed");
       setResult({ registration: note.vehicle.registration, plan, before: note.unassigned_total });
       onDone?.(plan, note);

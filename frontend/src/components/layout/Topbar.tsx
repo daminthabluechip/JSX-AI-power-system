@@ -7,11 +7,9 @@ import VehicleAvailableOffers from "@/components/notifications/VehicleAvailableO
 import { api, type Plan } from "@/lib/api";
 import { usePolling } from "@/lib/useApi";
 
-// Top bar: global search on the left, system status + notifications on the right.
-// The bell shows how many things need attention (checked every 6 seconds).
 export default function Topbar() {
   const [open, setOpen] = useState(false);
-  const [newPlan, setNewPlan] = useState<Plan | null>(null); // set after a re-plan from the menu
+  const [newPlan, setNewPlan] = useState<Plan | null>(null);
   const notifications = usePolling(() => api.notifications.list(), 6000);
   const items = notifications.data?.items ?? [];
 
@@ -19,7 +17,6 @@ export default function Topbar() {
     <header className="relative z-[1500] flex h-14 items-center justify-between border-b border-slate-200 bg-white px-8">
       <div className="flex items-center gap-2 text-sm text-slate-400">
         <Search size={16} />
-        {/* TODO: TOOL/API CALL HERE - wire global search to GET /orders?q= and GET /vehicles?q= */}
         <input
           placeholder="Search anything..."
           className="w-64 bg-transparent outline-none placeholder:text-slate-400"
@@ -27,7 +24,6 @@ export default function Topbar() {
       </div>
 
       <div className="flex items-center gap-4 text-xs text-slate-600">
-        {/* TODO: TOOL/API CALL HERE - replace with a real health check (GET /health) */}
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
           All systems operational
@@ -49,7 +45,6 @@ export default function Topbar() {
 
           {open && (
             <>
-              {/* invisible layer behind the menu: a click anywhere else closes it */}
               <button aria-label="Close notifications" className="fixed inset-0 cursor-default" onClick={() => setOpen(false)} />
               <div className="absolute right-0 top-10 max-h-[75vh] w-96 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
                 <p className="mb-3 text-sm font-semibold text-slate-900">Notifications</p>

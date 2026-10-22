@@ -7,7 +7,6 @@ from app.extensions import db
 
 @pytest.fixture
 def app():
-    """A fresh app with an empty in-memory database for every test."""
     app = create_app(TestConfig)
     with app.app_context():
         db.create_all()

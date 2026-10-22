@@ -21,7 +21,6 @@ const EVENT_TITLE: Record<EventType, string> = {
   vehicle_available: "Vehicle became available",
 };
 
-// "5 min ago" style text for the activity list. Event times are stored in UTC.
 function timeAgo(iso: string | null) {
   if (!iso) return "";
   const minutes = Math.max(0, Math.round((Date.now() - new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime()) / 60000));
@@ -30,8 +29,6 @@ function timeAgo(iso: string | null) {
   return minutes < 1440 ? `${Math.round(minutes / 60)} hr ago` : `${Math.round(minutes / 1440)} d ago`;
 }
 
-// Dashboard: every figure comes from the API (vehicles, today's orders, the newest plan,
-// recent events and live positions).
 export default function DashboardPage() {
   const summary = useApi(() => api.vehicles.summary());
   const orders = useApi(() => api.orders.list(todayISO()));
@@ -50,7 +47,6 @@ export default function DashboardPage() {
     ? Math.round(routes.reduce((s, r) => s + r.weight_utilization_pct, 0) / routes.length)
     : null;
 
-  // Planned arrival per order from the newest plan, shown next to each delivery.
   const eta: Record<number, string> = {};
   routes.forEach((r) => r.stops.forEach((s) => (eta[s.order_id] = s.planned_arrival)));
   const activeOrders = all.filter((o) => ["in_transit", "scheduled", "pending"].includes(o.status)).slice(0, 4);
@@ -75,7 +71,6 @@ export default function DashboardPage() {
 
       {error && <ErrorBox message={error} />}
 
-      {/* KPI row */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard label="Total Vehicles" value={summary.data?.all ?? "-"} icon={Truck}
           note={summary.data ? `${summary.data.available} available · ${summary.data.maintenance} in maintenance` : undefined} />
@@ -88,7 +83,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-3 gap-4">
-        {/* Per-vehicle load of the newest plan */}
         <section className="col-span-2 rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="font-semibold">Fleet utilization</h3>
           <p className="text-xs text-slate-500">Load of each vehicle in the latest plan (% of weight capacity)</p>
@@ -101,7 +95,6 @@ export default function DashboardPage() {
               {routes.map((r) => (
                 <div key={r.id} className="flex h-full flex-1 flex-col items-center gap-1">
                   <span className="text-xs font-semibold">{Math.round(r.weight_utilization_pct)}%</span>
-                  {/* The bar's height is a percentage of this area, which needs a definite height (flex-1 in a fixed-height column) */}
                   <div className="flex w-full max-w-16 flex-1 items-end">
                     <div className="w-full rounded-t bg-blue-600" style={{ height: `${Math.min(100, r.weight_utilization_pct)}%` }} />
                   </div>

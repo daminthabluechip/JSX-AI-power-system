@@ -1,13 +1,7 @@
-// Typed client for the Flask API. Every backend call in the app goes through this file.
-// The base URL comes from NEXT_PUBLIC_API_URL (see frontend/.env.local.example).
-
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:5000";
 
-// ---------- types (mirror the JSON the backend returns) ----------
+export type LatLng = [number, number];
 
-export type LatLng = [number, number]; // [latitude, longitude]
-
-// Kinds of vehicle; an order can require one of them (e.g. medicine needs "refrigerated").
 export const VEHICLE_TYPES = ["truck", "van", "refrigerated", "flatbed"] as const;
 export type VehicleType = (typeof VEHICLE_TYPES)[number];
 export const VEHICLE_TYPE_LABEL: Record<VehicleType, string> = {
@@ -43,7 +37,7 @@ export type Order = {
   target_date: string;
   earliest_arrival: string | null;
   latest_arrival: string | null;
-  required_vehicle_type: VehicleType | null; // null = any vehicle may deliver it
+  required_vehicle_type: VehicleType | null;
   status: OrderStatus;
 };
 
@@ -57,10 +51,10 @@ export type PlanSummary = {
   total_time_min: number | null;
   solve_time_s: number | null;
   baseline_distance_km: number | null;
-  distance_saved_pct: number | null; // total km vs the simple plan (misleading if they serve different numbers of orders)
-  served: number; // orders on a route in this plan
-  baseline_served: number | null; // orders the simple plan managed to serve
-  distance_saved_per_order_pct: number | null; // km per delivered order vs the simple plan: the fair comparison
+  distance_saved_pct: number | null;
+  served: number;
+  baseline_served: number | null;
+  distance_saved_per_order_pct: number | null;
 };
 
 export type PlanStop = {
@@ -71,7 +65,7 @@ export type PlanStop = {
   latitude: number;
   longitude: number;
   priority: Priority;
-  window_start: string | null; // the customer's delivery window, "HH:MM"
+  window_start: string | null;
   window_end: string | null;
   weight_kg: number;
   required_vehicle_type: VehicleType | null;
@@ -81,7 +75,7 @@ export type PlanStop = {
 
 export type PlanRoute = {
   id: number;
-  path: LatLng[]; // start point -> stops in order -> depot, for drawing the route
+  path: LatLng[];
   vehicle: {
     id: number;
     registration: string;
@@ -92,8 +86,8 @@ export type PlanRoute = {
     volume_capacity_m3: number;
   };
   planned_departure: string;
-  return_time: string | null; // back at the depot
-  distance_km: number | null; // driving distance of this vehicle's whole trip
+  return_time: string | null;
+  distance_km: number | null;
   load_kg: number;
   volume_m3: number;
   weight_utilization_pct: number;
@@ -136,17 +130,17 @@ export type TrackedVehicle = {
   longitude: number;
   speed_kmh: number;
   recorded_at: string | null;
-  lag_minutes: number; // minutes behind the plan (0 = on time)
+  lag_minutes: number;
   next_stop: { order_id: number; customer: string; eta: string } | null;
   plan_id: number | null;
-  path: LatLng[]; // planned route: start -> stops -> depot
+  path: LatLng[];
 };
 
 export type SimulatorStatus = {
   running: boolean;
-  speed: number; // simulated minutes per real second
+  speed: number;
   sim_minute: number;
-  sim_time: string; // HH:MM
+  sim_time: string;
   delays: Record<string, number>;
 };
 
@@ -156,7 +150,7 @@ export type DelayAlert = {
   lag_minutes: number;
   plan_id: number;
   message: string;
-  suggested_event: Record<string, unknown>; // body to POST to /events to re-plan
+  suggested_event: Record<string, unknown>;
 };
 
 export type Report = {
@@ -164,13 +158,13 @@ export type Report = {
   to: string;
   days: number;
   kpis: {
-    on_time_pct: number | null; // share of tracked deliveries that arrived within the customer's window
+    on_time_pct: number | null;
     measured_deliveries: number;
     late_deliveries: number;
     avg_delay_min: number | null;
     utilization_pct: number | null;
     planned_km: number | null;
-    distance_saved_pct: number | null; // vs. the nearest-neighbour baseline
+    distance_saved_pct: number | null;
     delivered: number;
     orders: number;
   };
@@ -188,22 +182,20 @@ export type Report = {
 
 export type ImportResult = {
   created: number;
-  skipped: number; // rows with errors
-  errors: { row: number; errors: Record<string, string> }[]; // row numbers like a spreadsheet (header = 1)
+  skipped: number;
+  errors: { row: number; errors: Record<string, string> }[];
 };
 
 export type EventType = "delay" | "breakdown" | "rush_order" | "cancellation" | "vehicle_available";
 
-// Something the dispatcher should know about. Today: a vehicle became available that could take
-// orders the latest plan had to leave unassigned.
 export type AppNotification = {
   type: "vehicle_available";
-  plan_id: number; // the plan that has the unassigned orders
+  plan_id: number;
   vehicle: { id: number; registration: string; model: string | null; vehicle_type: VehicleType; weight_capacity_kg: number };
-  orders: { order_id: number; customer: string; priority: Priority; weight_kg: number }[]; // what it could take
+  orders: { order_id: number; customer: string; priority: Priority; weight_kg: number }[];
   unassigned_total: number;
   message: string;
-  suggested_event: Record<string, unknown>; // body to POST to /events to re-plan with this vehicle
+  suggested_event: Record<string, unknown>;
 };
 
 export type DisruptionEvent = {
@@ -215,8 +207,6 @@ export type DisruptionEvent = {
   occurred_at: string | null;
   handled_by_plan_id: number | null;
 };
-
-// ---------- low-level request ----------
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public details?: unknown) {
@@ -233,13 +223,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       cache: "no-store",
     });
   } catch {
-    // Network failure: the backend is not running, or CORS blocked the call.
     throw new ApiError(`Cannot reach the API at ${BASE}. Is the Flask server running?`, 0);
   }
   if (res.status === 204) return undefined as T;
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    // Prefer a human-readable message from the backend (conflicts); field errors stay in `details`.
     const message =
       body?.details?.message ??
       (body?.error === "validation_failed" ? "Please fix the highlighted fields" : body?.error) ??
@@ -254,8 +242,6 @@ const post = <T>(path: string, data?: unknown) =>
 const patch = <T>(path: string, data: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(data) });
 const del = (path: string) => request<void>(path, { method: "DELETE" });
 
-// ---------- endpoints ----------
-
 export const api = {
   vehicles: {
     list: () => request<{ items: Vehicle[]; total: number }>("/vehicles?per_page=200"),
@@ -266,16 +252,12 @@ export const api = {
     remove: (id: number) => del(`/vehicles/${id}`),
   },
   orders: {
-    // date is optional (YYYY-MM-DD); omit to list every day
     list: (date?: string) =>
       request<{ items: Order[]; total: number }>(`/orders?per_page=200${date ? `&date=${date}` : ""}`),
     create: (order: Record<string, unknown>) => post<Order>("/orders", order),
     update: (id: number, changes: Record<string, unknown>) => patch<Order>(`/orders/${id}`, changes),
     remove: (id: number) => del(`/orders/${id}`),
-    // Link for the downloadable CSV template (opened directly by the browser).
     templateUrl: `${BASE}/orders/import/template`,
-    // Upload a CSV file. The backend answers 400 with the row errors when the file has bad rows
-    // (unless skipInvalid), so that response is returned to the caller instead of thrown.
     importCsv: async (file: File, skipInvalid: boolean): Promise<ImportResult & { rejected: boolean }> => {
       let res: Response;
       try {
@@ -291,12 +273,10 @@ export const api = {
       if (res.ok || (res.status === 400 && Array.isArray(body?.errors))) {
         return { created: body.created, skipped: body.skipped, errors: body.errors, rejected: !res.ok };
       }
-      // Whole-file problems (missing columns, empty file, wrong encoding, too large)
       throw new ApiError(body?.details?.file ?? body?.error ?? `Import failed (${res.status})`, res.status);
     },
   },
   plans: {
-    // Starts the optimizer in the background; poll get() until status is ready/failed.
     generate: (body: { date: string; vehicle_ids?: number[]; order_ids?: number[]; time_limit_s?: number }) =>
       post<PlanSummary>("/plans/generate", body),
     get: (id: number) => request<Plan>(`/plans/${id}`),
@@ -306,7 +286,6 @@ export const api = {
   },
   reports: {
     get: (days: number) => request<Report>(`/reports?days=${days}`),
-    // Returns the CSV file contents as a Blob, ready to be saved by the browser.
     exportCsv: async (days: number) => {
       const res = await fetch(`${BASE}/reports/export?days=${days}`, { cache: "no-store" });
       if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status);
@@ -317,13 +296,10 @@ export const api = {
     positions: () =>
       request<{ plan_id: number | null; items: TrackedVehicle[]; simulator: SimulatorStatus }>("/tracking/positions"),
     alerts: () => request<{ items: DelayAlert[] }>("/tracking/alerts"),
-    // action: start {time?, speed?} | stop | delay {vehicle_id, minutes} | reset
     simulator: (body: Record<string, unknown>) => post<SimulatorStatus>("/tracking/simulator", body),
   },
   demo: {
-    // enabled = this is a shared demo installation (the backend's DEMO_MODE is on)
     status: () => request<{ enabled: boolean }>("/demo"),
-    // delete everything and load the sample data again
     reset: () => post<{ reset: boolean }>("/demo/reset"),
   },
   notifications: {
@@ -331,13 +307,11 @@ export const api = {
   },
   events: {
     list: (limit = 20) => request<{ items: DisruptionEvent[] }>(`/events?limit=${limit}`),
-    // Applies the disruption and starts a re-plan; returns the new plan to poll.
     report: (body: Record<string, unknown>) =>
       post<{ event: DisruptionEvent; plan: PlanSummary; replaces_plan_id: number }>("/events", body),
   },
 };
 
-/** Poll a plan until the optimizer finishes (status ready or failed). */
 export async function waitForPlan(id: number, intervalMs = 1000, timeoutMs = 120_000): Promise<Plan> {
   const started = Date.now();
   for (;;) {
@@ -348,9 +322,7 @@ export async function waitForPlan(id: number, intervalMs = 1000, timeoutMs = 120
   }
 }
 
-// ---------- display helpers ----------
-
-export const todayISO = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+export const todayISO = () => new Date().toLocaleDateString("en-CA");
 
 export const STATUS_LABEL: Record<string, string> = {
   available: "Available",

@@ -1,10 +1,3 @@
-"""Glue between the database and the optimizer.
-
-generate flow:  API creates a Plan row (status "queued")  ->  run_plan() loads vehicles and
-orders, builds the travel matrix, calls the optimizer + baseline, saves routes/stops, and marks
-the plan "ready" (or "failed"). The solve runs in a background thread so the request returns
-immediately and the dashboard polls GET /plans/<id> until the status changes.
-"""
 import threading
 import traceback
 from datetime import datetime, time, timedelta
@@ -17,17 +10,14 @@ from ..optimizer.types import OrderSpec, VehicleSpec
 from ..optimizer.validators import check_plan
 from .routing_service import get_provider
 
-# Orders in these states still need to be planned.
 PLANNABLE_ORDER_STATUSES = ["pending", "scheduled"]
 
 
 def minutes(t, default):
-    """datetime.time -> minutes since midnight."""
     return default if t is None else t.hour * 60 + t.minute
 
 
 def create_plan(day, vehicle_ids=None, order_ids=None, time_limit_s=None):
-    """Insert a queued Plan row (next version number for that date) and return it."""
     version = Plan.query.filter_by(planning_date=day).count() + 1
     plan = Plan(planning_date=day, version=version, status="queued")
     db.session.add(plan)
@@ -37,27 +27,19 @@ def create_plan(day, vehicle_ids=None, order_ids=None, time_limit_s=None):
 
 def start_plan(app, plan, vehicle_ids=None, order_ids=None, time_limit_s=None, shift_overrides=None,
                previous_plan_id=None, starts=None):
-    """Run the solve now (tests) or in a background thread (normal operation).
-
-    shift_overrides: {vehicle_id: earliest departure in minutes} - used by re-planning when
-    a vehicle is delayed and cannot leave the depot at its normal shift start.
-    previous_plan_id: warm-start from that plan so a re-plan changes as little as possible.
-    starts: {vehicle_id: (lat, lon, earliest_minute)} - plan from where a vehicle is right now.
-    """
     limit = time_limit_s or app.config["SOLVER_TIME_LIMIT_S"]
     if app.config["PLAN_SYNC"]:
         run_plan(app, plan.id, vehicle_ids, order_ids, limit, shift_overrides, previous_plan_id, starts)
         return
 
     def worker():
-        with app.app_context():  # the thread needs its own app context / db session
+        with app.app_context():
             run_plan(app, plan.id, vehicle_ids, order_ids, limit, shift_overrides, previous_plan_id, starts)
 
     threading.Thread(target=worker, daemon=True).start()
 
 
 def load_problem(day, vehicle_ids, order_ids, shift_overrides=None, starts=None):
-    """Read vehicles/orders/depot from the DB and convert them to optimizer inputs."""
     depot = Depot.query.first()
     if depot is None:
         raise ValueError("No depot configured")
@@ -71,7 +53,6 @@ def load_problem(day, vehicle_ids, order_ids, shift_overrides=None, starts=None)
           else oq.filter(Order.status.in_(PLANNABLE_ORDER_STATUSES)))
     orders_db = oq.order_by(Order.id).all()
 
-    # Fail loudly instead of returning an empty plan that looks successful.
     for label, wanted, found in (("vehicle", vehicle_ids, vehicles_db), ("order", order_ids, orders_db)):
         missing = sorted(set(wanted or []) - {x.id for x in found})
         if missing:
@@ -92,8 +73,6 @@ def load_problem(day, vehicle_ids, order_ids, shift_overrides=None, starts=None)
               for o in orders_db]
     coords = [(depot.latitude, depot.longitude)] + [(o.latitude, o.longitude) for o in orders_db]
 
-    # Vehicles already on the road start from their current position: add one matrix row per
-    # such vehicle, and don't let them "leave" before the moment the position was reported.
     for spec in vehicles:
         if starts and spec.id in starts:
             lat, lon, earliest = starts[spec.id]
@@ -105,7 +84,6 @@ def load_problem(day, vehicle_ids, order_ids, shift_overrides=None, starts=None)
 
 def run_plan(app, plan_id, vehicle_ids, order_ids, time_limit_s, shift_overrides=None,
              previous_plan_id=None, starts=None):
-    """Solve and store the result for one plan. Never raises: failures are saved on the plan."""
     plan = db.session.get(Plan, plan_id)
     try:
         plan.status = "solving"
@@ -113,11 +91,9 @@ def run_plan(app, plan_id, vehicle_ids, order_ids, time_limit_s, shift_overrides
 
         vehicles, orders, coords = load_problem(
             plan.planning_date, vehicle_ids, order_ids, shift_overrides, starts)
-        plan.vehicle_ids = [v.id for v in vehicles]   # remember who was considered (see Plan.vehicle_ids)
+        plan.vehicle_ids = [v.id for v in vehicles]
         db.session.commit()
 
-        # TODO: TOOL/API CALL HERE - the routing provider (OSRM/ORS) is called inside matrix()
-        # when ROUTING_PROVIDER=osrm; results are cached per pair.
         dist_m, dur_min = get_provider(app.config).matrix(coords)
 
         previous = None
@@ -127,7 +103,7 @@ def run_plan(app, plan_id, vehicle_ids, order_ids, time_limit_s, shift_overrides
         result = solve(vehicles, orders, dist_m, dur_min, time_limit_s, previous)
         baseline = nearest_neighbour(vehicles, orders, dist_m, dur_min)
 
-        problems = check_plan(result, vehicles, orders)  # must never trigger; guards solver bugs
+        problems = check_plan(result, vehicles, orders)
         if problems:
             raise RuntimeError("Invalid plan: " + "; ".join(problems[:3]))
 
@@ -142,7 +118,6 @@ def run_plan(app, plan_id, vehicle_ids, order_ids, time_limit_s, shift_overrides
 
 
 def save_result(plan, result, baseline, coords=None):
-    """Write routes and stops to the DB and fill in the plan totals."""
     midnight = datetime.combine(plan.planning_date, time(0, 0))
     at = lambda m: midnight + timedelta(minutes=m)  # noqa: E731
 
@@ -150,7 +125,7 @@ def save_result(plan, result, baseline, coords=None):
         route = Route(plan_id=plan.id, vehicle_id=r.vehicle_id, planned_departure=at(r.departure),
                       load_kg=r.load_kg, volume_m3=r.volume_m3,
                       distance_km=round(r.distance_m / 1000, 2), return_time=at(r.return_time))
-        if r.start_node:   # started from a vehicle position instead of the depot
+        if r.start_node:
             route.start_latitude, route.start_longitude = coords[r.start_node]
         route.stops = [Stop(order_id=s.order_id, sequence=s.sequence,
                             planned_arrival=at(s.arrival), planned_departure=at(s.departure))
